@@ -36,10 +36,10 @@ def dataset_action_to_env_action(dataset_action: np.ndarray) -> np.ndarray:
     env_action = np.zeros(12, dtype=np.float64)
     env_action[0:3] = dataset_action[5:8]    # eef_pos
     env_action[3:6] = dataset_action[8:11]   # eef_rot
-    env_action[6] = -1.0 if dataset_action[11] < 0.5 else 1.0  # gripper binary
+    env_action[6] = -1.0 if dataset_action[11] < 0.0 else 1.0  # gripper binary (raw space: {-1,+1})
     env_action[7:10] = dataset_action[0:3]   # base_motion
     env_action[10] = dataset_action[3]       # reserve/torso
-    env_action[11] = -1.0 if dataset_action[4] < 0.5 else 1.0  # base_mode flag
+    env_action[11] = -1.0 if dataset_action[4] < 0.0 else 1.0  # base_mode flag (raw space: {-1,+1})
     return env_action
 
 
