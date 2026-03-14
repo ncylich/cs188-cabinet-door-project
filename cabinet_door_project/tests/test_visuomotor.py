@@ -4,25 +4,24 @@ import numpy as np
 import torch
 import pytest
 
-from diffusion_policy.models.vision import ResNetImageEncoder, MultiCameraEncoder
+from diffusion_policy.models.vision import SpatialResNetEncoder, MultiCameraEncoder
 
 
 class TestImageEncoder:
     def test_output_shape(self):
-        encoder = ResNetImageEncoder(feature_dim=512, freeze=True)
+        encoder = SpatialResNetEncoder(feature_dim=512, freeze_backbone=True)
         images = torch.randint(0, 255, (4, 3, 256, 256), dtype=torch.uint8)
         features = encoder(images)
         assert features.shape == (4, 512)
 
-    def test_augmentation_differs(self):
-        encoder = ResNetImageEncoder(feature_dim=512, freeze=False)
-        encoder.train()
+    def test_deterministic_eval(self):
+        encoder = SpatialResNetEncoder(feature_dim=512, freeze_backbone=True)
+        encoder.eval()
         img = torch.randint(0, 255, (2, 3, 256, 256), dtype=torch.uint8)
-        f1 = encoder(img, augment=True)
-        f2 = encoder(img, augment=True)
-        # Augmentation may or may not differ per call due to randomness
-        # Just verify it doesn't crash and shapes are correct
-        assert f1.shape == (2, 512)
+        with torch.no_grad():
+            f1 = encoder(img)
+            f2 = encoder(img)
+        torch.testing.assert_close(f1, f2)
 
 
 class TestMultiCameraEncoder:
@@ -30,7 +29,7 @@ class TestMultiCameraEncoder:
         encoder = MultiCameraEncoder(num_cameras=3, feature_dim=512, freeze=True)
         images = [torch.randint(0, 255, (4, 3, 256, 256), dtype=torch.uint8) for _ in range(3)]
         features = encoder(images)
-        assert features.shape == (4, 1536)  # 3 * 512
+        assert features.shape == (4, 1536)
 
     def test_combined_with_state(self):
         encoder = MultiCameraEncoder(num_cameras=3, feature_dim=512, freeze=True)
@@ -43,7 +42,7 @@ class TestMultiCameraEncoder:
 
 class TestGradientToImages:
     def test_unfrozen_gradients_flow(self):
-        encoder = ResNetImageEncoder(feature_dim=512, freeze=False)
+        encoder = SpatialResNetEncoder(feature_dim=512, freeze_backbone=False)
         encoder.train()
         images = torch.randint(0, 255, (2, 3, 256, 256), dtype=torch.uint8).float() / 255.0
         images.requires_grad_(True)

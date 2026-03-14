@@ -127,12 +127,13 @@ class DDPMScheduler:
         x_T: torch.Tensor,
         context: torch.Tensor,
         generator: torch.Generator | None = None,
+        **model_kwargs,
     ) -> torch.Tensor:
         x = x_T
         original_shape = x.shape
         for t in reversed(range(self.num_train_steps)):
             t_batch = torch.full((x.shape[0],), t, device=x.device, dtype=torch.long)
-            noise_pred = model(x, context, t_batch).reshape(original_shape)
+            noise_pred = model(x, context, t_batch, **model_kwargs).reshape(original_shape)
             x = self.step(noise_pred, t, x, generator=generator)
         return x
 
@@ -143,13 +144,14 @@ class DDPMScheduler:
         context: torch.Tensor,
         num_inference_steps: int = 16,
         generator: torch.Generator | None = None,
+        **model_kwargs,
     ) -> torch.Tensor:
         timesteps = self.get_ddim_timesteps(num_inference_steps)
         x = x_T
         original_shape = x.shape
         for i, t in enumerate(timesteps):
             t_batch = torch.full((x.shape[0],), t, device=x.device, dtype=torch.long)
-            noise_pred = model(x, context, t_batch).reshape(original_shape)
+            noise_pred = model(x, context, t_batch, **model_kwargs).reshape(original_shape)
             next_t = timesteps[i + 1] if i + 1 < len(timesteps) else -1
             x = self.ddim_step(noise_pred, t, x, next_t, generator=generator)
         return x

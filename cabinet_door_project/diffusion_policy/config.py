@@ -44,3 +44,5 @@ class DiffusionConfig:
     ])
     image_encoder_feature_dim: int = 512
     freeze_image_encoder: bool = True
+    encoder_type: str = "spatial_resnet"  # "spatial_resnet" or "r3m"
+    r3m_model_size: str = "resnet18"  # "resnet18", "resnet34", "resnet50"

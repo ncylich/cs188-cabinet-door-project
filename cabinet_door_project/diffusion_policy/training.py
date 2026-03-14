@@ -67,6 +67,18 @@ def build_model(config: DiffusionConfig) -> nn.Module:
             n_heads=config.n_heads,
             d_model=config.d_model,
         )
+    elif config.backbone == "visuomotor":
+        from diffusion_policy.models.transformer import VisuomotorTransformerNoiseNet
+        return VisuomotorTransformerNoiseNet(
+            action_dim=config.action_dim,
+            state_dim=config.state_dim,
+            image_feature_dim=config.image_encoder_feature_dim * len(config.image_keys),
+            horizon=config.horizon,
+            n_obs_steps=config.n_obs_steps,
+            n_layers=config.n_layers,
+            n_heads=config.n_heads,
+            d_model=config.d_model,
+        )
     raise ValueError(f"Unknown backbone: {config.backbone}")
 
 
@@ -238,6 +250,113 @@ def train(config: DiffusionConfig, dataset: Optional[DiffusionPolicyDataset] = N
                 epoch_loss += loss.item()
                 n_batches += 1
                 global_step += 1
+
+        avg_loss = epoch_loss / max(n_batches, 1)
+
+        if (epoch + 1) % 100 == 0 or epoch == 0:
+            elapsed = time.time() - start_time
+            logger.info(
+                "Epoch %d/%d  loss=%.6f  lr=%.2e  time=%.1fs",
+                epoch + 1, config.num_epochs, avg_loss,
+                optimizer.param_groups[0]["lr"], elapsed,
+            )
+
+        if avg_loss < best_loss:
+            best_loss = avg_loss
+            save_checkpoint(
+                os.path.join(config.checkpoint_dir, "best.pt"),
+                model, ema, optimizer, lr_scheduler, config, epoch, global_step, avg_loss,
+            )
+
+    save_checkpoint(
+        os.path.join(config.checkpoint_dir, "final.pt"),
+        model, ema, optimizer, lr_scheduler, config, epoch, global_step, avg_loss,
+    )
+
+    elapsed = time.time() - start_time
+    logger.info("Training complete in %.1fs. Best loss: %.6f", elapsed, best_loss)
+    return os.path.join(config.checkpoint_dir, "best.pt")
+
+
+def train_visuomotor(config: DiffusionConfig) -> str:
+    from diffusion_policy.data import VisuomotorDataset, precompute_image_features
+    from diffusion_policy.models.vision import MultiCameraEncoder
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    logger.info("Precomputing image features with %s encoder", config.encoder_type)
+    image_encoder = MultiCameraEncoder(
+        num_cameras=len(config.image_keys),
+        feature_dim=config.image_encoder_feature_dim,
+        freeze=True,
+        encoder_type=config.encoder_type,
+        r3m_model_size=config.r3m_model_size,
+    )
+    image_features = precompute_image_features(
+        config.dataset_path, image_encoder, device, batch_size=64,
+    )
+
+    dataset = VisuomotorDataset(config, image_features)
+    img_feat_dim = config.image_encoder_feature_dim * len(config.image_keys)
+
+    all_obs, all_img, all_actions = [], [], []
+    for i in range(len(dataset)):
+        obs, img, actions = dataset[i]
+        all_obs.append(obs)
+        all_img.append(img)
+        all_actions.append(actions)
+    all_obs = torch.stack(all_obs).to(device)
+    all_img = torch.stack(all_img).to(device)
+    all_actions = torch.stack(all_actions).to(device)
+    n_samples = all_obs.shape[0]
+
+    logger.info("Loaded %d visuomotor samples to GPU (img features: %d-dim)", n_samples, img_feat_dim)
+
+    model = build_model(config).to(device)
+    noise_scheduler = build_scheduler(config)
+    ema = EMA(model, decay=config.ema_decay)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=config.lr, weight_decay=config.weight_decay)
+
+    n_batches_per_epoch = n_samples // config.batch_size
+    total_steps = config.num_epochs * n_batches_per_epoch
+    lr_scheduler = get_cosine_schedule_with_warmup(optimizer, config.warmup_steps, total_steps)
+
+    os.makedirs(config.checkpoint_dir, exist_ok=True)
+    best_loss = float("inf")
+    global_step = 0
+
+    logger.info("Training visuomotor backbone for %d epochs (%d steps)", config.num_epochs, total_steps)
+    start_time = time.time()
+
+    for epoch in range(config.num_epochs):
+        model.train()
+        epoch_loss = 0.0
+        n_batches = 0
+
+        perm = torch.randperm(n_samples, device=device)
+        for batch_start in range(0, n_samples - config.batch_size + 1, config.batch_size):
+            idx = perm[batch_start:batch_start + config.batch_size]
+            obs = all_obs[idx]
+            img = all_img[idx]
+            actions = all_actions[idx]
+
+            noise = torch.randn_like(actions)
+            timesteps = torch.randint(0, noise_scheduler.num_train_steps, (obs.shape[0],), device=device)
+            noisy_actions = noise_scheduler.add_noise(actions, noise, timesteps)
+
+            with torch.amp.autocast("cuda", enabled=config.use_amp, dtype=torch.bfloat16):
+                noise_pred = model(noisy_actions, obs, timesteps, image_features=img)
+                loss = nn.functional.mse_loss(noise_pred, noise.reshape(noise_pred.shape))
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            lr_scheduler.step()
+            ema.update(model)
+
+            epoch_loss += loss.item()
+            n_batches += 1
+            global_step += 1
 
         avg_loss = epoch_loss / max(n_batches, 1)
 
