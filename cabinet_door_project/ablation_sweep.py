@@ -25,13 +25,29 @@ from diffusion_policy.models.unet import UNetNoiseNet
 from diffusion_policy.models.mlp import MLPNoiseNet
 from diffusion_policy.models.transformer import TransformerNoiseNet
 from diffusion_policy.training import build_scheduler, EMA, get_cosine_schedule_with_warmup
-from diffusion_policy.evaluation import create_env, extract_state, dataset_action_to_env_action
+from diffusion_policy.evaluation import (
+    create_env, extract_state, dataset_action_to_env_action, check_one_door_success,
+)
 
 device = torch.device("cuda")
 
 # ========== Load preprocessed data ==========
 SAVE_DIR = "/tmp/diffusion_policy_checkpoints"
-data = torch.load(os.path.join(SAVE_DIR, "preprocessed_all_states.pt"), weights_only=False)
+_pt_path = os.path.join(SAVE_DIR, "preprocessed_all_states.pt")
+
+if not os.path.exists(_pt_path):
+    logger.info("preprocessed_all_states.pt not found — running preprocess_all_states.py...")
+    from preprocess_all_states import preprocess_all
+    preprocess_all(save_dir=SAVE_DIR)
+
+data = torch.load(_pt_path, weights_only=False)
+
+# Auto-extend with handle/hinge features if missing
+if 'handle_pos' not in data['features']:
+    logger.info("Handle features missing — running extend_preprocessed()...")
+    from preprocess_all_states import extend_preprocessed
+    data = extend_preprocessed(save_path=_pt_path)
+
 features = data['features']  # dict of name → tensor (N, dim)
 actions = data['actions']     # (N, 12)
 ep_bounds = data['ep_boundaries']  # (n_eps, 3) = (ep_idx, start, end)
@@ -358,14 +374,36 @@ def _eval_worker(args):
     an_mean = _torch.from_numpy(act_mean_np).float()
     an_std = _torch.from_numpy(act_std_np).float()
 
-    from diffusion_policy.evaluation import create_env, dataset_action_to_env_action, STATE_KEYS_ORDERED
+    from diffusion_policy.evaluation import (
+        create_env, dataset_action_to_env_action, STATE_KEYS_ORDERED,
+        get_handle_pos_from_env, check_one_door_success,
+    )
 
     env = create_env(split='pretrain', seed=seed)
     obs = env.reset()
 
+    # mutable active_site tracking for handle feature eval
+    _active_site = [None]
+
+    def _get_hinge_angle(env):
+        best = 0.0
+        try:
+            for jname in env.sim.model.joint_names:
+                if 'hinge' in jname.lower():
+                    jid = env.sim.model.joint_name2id(jname)
+                    qadr = env.sim.model.jnt_qposadr[jid]
+                    ang = float(env.sim.data.qpos[qadr])
+                    if abs(ang) > abs(best):
+                        best = ang
+        except Exception:
+            pass
+        return best
+
     # Build obs
-    def build_obs(obs):
+    def build_obs(obs, env):
         parts = []
+        _eef_pos = None
+        _handle_pos = None
         for name in feature_names:
             if name == 'proprio':
                 parts.append(_np.concatenate([obs[k].flatten() for k in STATE_KEYS_ORDERED]))
@@ -384,14 +422,37 @@ def _eval_worker(args):
             elif name == 'gripper_to_door_dist':
                 d2e = obs.get('door_obj_to_robot0_eef_pos', _np.zeros(3))
                 parts.append(_np.array([_np.linalg.norm(d2e)]))
+            elif name == 'handle_pos':
+                if _eef_pos is None:
+                    _eef_pos = obs.get('robot0_eef_pos', _np.zeros(3)).flatten().astype(_np.float32)
+                hp, _active_site[0] = get_handle_pos_from_env(env, _active_site[0], _eef_pos)
+                _handle_pos = hp
+                parts.append(hp)
+            elif name == 'handle_to_eef':
+                if _eef_pos is None:
+                    _eef_pos = obs.get('robot0_eef_pos', _np.zeros(3)).flatten().astype(_np.float32)
+                if _handle_pos is None:
+                    hp, _active_site[0] = get_handle_pos_from_env(env, _active_site[0], _eef_pos)
+                    _handle_pos = hp
+                parts.append((_eef_pos - _handle_pos).astype(_np.float32))
+            elif name == 'hinge_angle':
+                parts.append(_np.array([_get_hinge_angle(env)], dtype=_np.float32))
         return _np.concatenate(parts).astype(_np.float32)
 
-    aug = build_obs(obs)
+    aug = build_obs(obs, env)
     oh = _deque([aug] * n_obs, maxlen=n_obs)
     aq = _deque()
     success = False
-    d2e = obs.get('door_obj_to_robot0_eef_pos', _np.zeros(3))
-    init_dist = _np.linalg.norm(d2e)
+
+    # Use handle_to_eef distance for dist_reduction metric if available
+    _uses_handle = 'handle_to_eef' in feature_names or 'handle_pos' in feature_names
+    if _uses_handle:
+        _eef0 = obs.get('robot0_eef_pos', _np.zeros(3)).flatten().astype(_np.float32)
+        _hp0, _ = get_handle_pos_from_env(env, None, _eef0)
+        init_dist = float(_np.linalg.norm(_eef0 - _hp0))
+    else:
+        d2e = obs.get('door_obj_to_robot0_eef_pos', _np.zeros(3))
+        init_dist = _np.linalg.norm(d2e)
     min_dist = init_dist
 
     for step in range(max_steps):
@@ -412,11 +473,18 @@ def _eval_worker(args):
         env_act = dataset_action_to_env_action(aq.popleft())
         env_act = _np.clip(env_act, -1.0, 1.0)
         obs, reward, done, info = env.step(env_act)
-        aug = build_obs(obs)
+        aug = build_obs(obs, env)
         oh.append(aug)
-        d2e = obs.get('door_obj_to_robot0_eef_pos', _np.zeros(3))
-        min_dist = min(min_dist, _np.linalg.norm(d2e))
-        if env._check_success():
+
+        if _uses_handle:
+            _eef_cur = obs.get('robot0_eef_pos', _np.zeros(3)).flatten().astype(_np.float32)
+            _hp_cur, _active_site[0] = get_handle_pos_from_env(env, _active_site[0], _eef_cur)
+            min_dist = min(min_dist, float(_np.linalg.norm(_eef_cur - _hp_cur)))
+        else:
+            d2e = obs.get('door_obj_to_robot0_eef_pos', _np.zeros(3))
+            min_dist = min(min_dist, _np.linalg.norm(d2e))
+
+        if check_one_door_success(env):
             success = True
             break
 
@@ -493,12 +561,14 @@ def eval_model(model, obs_mean, obs_std, act_mean, act_std, state_dim,
     return successes, np.mean(dist_reds)
 
 
-def _build_obs_from_env(obs, feature_names):
+def _build_obs_from_env(obs, feature_names, env=None, active_site_ref=None):
     """Build observation vector from env obs dict matching feature_names."""
+    from diffusion_policy.evaluation import STATE_KEYS_ORDERED, get_handle_pos_from_env
     parts = []
+    _eef_pos = None
+    _handle_pos = None
     for name in feature_names:
         if name == 'proprio':
-            from diffusion_policy.evaluation import STATE_KEYS_ORDERED
             parts.append(np.concatenate([obs[k].flatten() for k in STATE_KEYS_ORDERED]))
         elif name == 'door_pos':
             parts.append(obs['door_obj_pos'].flatten())
@@ -515,6 +585,28 @@ def _build_obs_from_env(obs, feature_names):
         elif name == 'gripper_to_door_dist':
             d2e = obs.get('door_obj_to_robot0_eef_pos', np.zeros(3))
             parts.append(np.array([np.linalg.norm(d2e)]))
+        elif name == 'handle_pos' and env is not None:
+            if _eef_pos is None:
+                _eef_pos = obs.get('robot0_eef_pos', np.zeros(3)).flatten().astype(np.float32)
+            active = active_site_ref[0] if active_site_ref is not None else None
+            hp, new_active = get_handle_pos_from_env(env, active, _eef_pos)
+            if active_site_ref is not None:
+                active_site_ref[0] = new_active
+            _handle_pos = hp
+            parts.append(hp)
+        elif name == 'handle_to_eef' and env is not None:
+            if _eef_pos is None:
+                _eef_pos = obs.get('robot0_eef_pos', np.zeros(3)).flatten().astype(np.float32)
+            if _handle_pos is None:
+                active = active_site_ref[0] if active_site_ref is not None else None
+                hp, new_active = get_handle_pos_from_env(env, active, _eef_pos)
+                if active_site_ref is not None:
+                    active_site_ref[0] = new_active
+                _handle_pos = hp
+            parts.append((_eef_pos - _handle_pos).astype(np.float32))
+        else:
+            # fallback: zeros for unsupported features
+            pass
     return np.concatenate(parts).astype(np.float32)
 
 
@@ -617,20 +709,24 @@ if __name__ == "__main__":
     print("="*60, flush=True)
 
     feature_configs = [
-        ("F1_baseline_19d",
+        # TA-recommended handle-based features (per plan)
+        ("F1_baseline_16d",
+         ['proprio']),
+        ("F2_+handle_pos_19d",
+         ['proprio', 'handle_pos']),
+        ("F3_+rel_pos_22d",
+         ['proprio', 'handle_pos', 'handle_to_eef']),
+        ("F4_+hinge_23d",
+         ['proprio', 'handle_pos', 'handle_to_eef', 'hinge_angle']),
+        ("F5_+door_obj_26d",
+         ['proprio', 'handle_pos', 'handle_to_eef', 'hinge_angle', 'door_pos']),
+        ("F6_rel_only_19d",
+         ['proprio', 'handle_to_eef']),
+        # Door-centroid baselines for comparison
+        ("F7_door_pos_19d",
          ['proprio', 'door_pos']),
-        ("F2_+rel_pos_22d",
+        ("F8_door_rel_22d",
          ['proprio', 'door_pos', 'door_to_eef_pos']),
-        ("F3_+rel_pos_quat_26d",
-         ['proprio', 'door_pos', 'door_to_eef_pos', 'door_to_eef_quat']),
-        ("F4_rel_only_19d",
-         ['proprio', 'door_to_eef_pos']),
-        ("F5_all_door_30d",
-         ['proprio', 'door_pos', 'door_quat', 'door_to_eef_pos', 'door_to_eef_quat']),
-        ("F6_+eef_global_25d",
-         ['proprio', 'door_pos', 'eef_pos', 'door_to_eef_pos']),
-        ("F7_+dist_scalar_23d",
-         ['proprio', 'door_pos', 'door_to_eef_pos', 'gripper_to_door_dist']),
     ]
 
     for name, feat_names in feature_configs:
