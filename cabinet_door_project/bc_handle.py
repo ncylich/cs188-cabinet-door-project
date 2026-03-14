@@ -84,6 +84,7 @@ from diffusion_policy.evaluation import (
 )
 from diffusion_policy.scheduler import DDPMScheduler
 from diffusion_policy.models.mlp import TimestepMLP
+from diffusion_policy.models.unet import UNetNoiseNet
 
 
 def create_env(split='pretrain', seed=0):
@@ -363,6 +364,24 @@ class BCMLP(nn.Module):
         return self.net(x)
 
 
+class GripperMLP(nn.Module):
+    """Independent binary gripper classifier (for split-gripper arch)."""
+    def __init__(self, state_dim, hidden=128, n_layers=2, dropout=0.1, **kwargs):
+        super().__init__()
+        dims = [state_dim] + [hidden] * n_layers + [1]
+        layers = []
+        for i in range(len(dims) - 1):
+            layers.append(nn.Linear(dims[i], dims[i + 1]))
+            if i < len(dims) - 2:
+                layers += [nn.GELU(), nn.Dropout(dropout)]
+        self.net = nn.Sequential(*layers)
+
+    def forward(self, states, padding_mask=None):
+        # Use only the most recent frame
+        x = states[:, -1] if states.dim() == 3 else states
+        return self.net(x)  # (B, 1) raw logit
+
+
 class BCTransformerBinaryGripper(nn.Module):
     """BCTransformer with a separate BCE classification head for the gripper dim."""
     def __init__(self, state_dim, action_dim, seq_len=16,
@@ -464,7 +483,11 @@ class TemporalDiffusionPolicy(nn.Module):
 
 
 def build_model(arch, state_dim, action_dim, seq_len, d_model, n_heads, n_layers, dropout,
-                binary_gripper=False, denoiser_hidden=512, **_):
+                binary_gripper=False, denoiser_hidden=512, horizon=16, n_obs_steps=2, **_):
+    if arch == 'unet':
+        return UNetNoiseNet(action_dim=action_dim, state_dim=state_dim,
+                            horizon=horizon, n_obs_steps=n_obs_steps,
+                            channels=(256, 512, 1024))
     if arch == 'diffusion':
         return TemporalDiffusionPolicy(state_dim, action_dim, seq_len, d_model,
                                        n_heads, n_layers, dropout, denoiser_hidden)
@@ -473,7 +496,48 @@ def build_model(arch, state_dim, action_dim, seq_len, d_model, n_heads, n_layers
     if binary_gripper:
         return BCTransformerBinaryGripper(state_dim, action_dim, seq_len,
                                           d_model, n_heads, n_layers, dropout)
+    # 'transformer' or 'split_gripper' arm portion — same BCTransformer body
     return BCTransformer(state_dim, action_dim, seq_len, d_model, n_heads, n_layers, dropout)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# U-Net windowed dataset builder
+# ═══════════════════════════════════════════════════════════════════════════
+
+def build_unet_tensors(obs, actions, horizon, n_obs_steps, ep_starts=None):
+    """Build (obs_context, action_horizon) pairs for U-Net diffusion training.
+
+    Each sample: obs_context = last n_obs_steps states (flat), action_horizon = next horizon actions.
+    Episode boundaries respected — no cross-episode windows.
+    """
+    N, D = obs.shape
+    A = actions.shape[-1]
+    obs_np  = obs.numpy()     if isinstance(obs,     torch.Tensor) else np.asarray(obs,     dtype=np.float32)
+    act_np  = actions.numpy() if isinstance(actions, torch.Tensor) else np.asarray(actions, dtype=np.float32)
+
+    if ep_starts:
+        ep_starts_s = sorted(ep_starts)
+        ep_ends_s   = ep_starts_s[1:] + [N]
+        frame_ep_start = np.zeros(N, dtype=np.int64)
+        frame_ep_end   = np.full(N, N, dtype=np.int64)
+        for s, e in zip(ep_starts_s, ep_ends_s):
+            frame_ep_start[s:e] = s
+            frame_ep_end[s:e]   = e
+    else:
+        frame_ep_start = np.zeros(N, dtype=np.int64)
+        frame_ep_end   = np.full(N, N, dtype=np.int64)
+
+    valid = [i for i in range(N)
+             if (i - n_obs_steps + 1 >= frame_ep_start[i] and
+                 i + horizon         <= frame_ep_end[i])]
+
+    M = len(valid)
+    obs_ctxs    = np.zeros((M, n_obs_steps * D), dtype=np.float32)
+    act_horizons = np.zeros((M, horizon, A),      dtype=np.float32)
+    for k, i in enumerate(valid):
+        obs_ctxs[k]     = obs_np[i - n_obs_steps + 1:i + 1].reshape(-1)
+        act_horizons[k] = act_np[i:i + horizon]
+    return torch.from_numpy(obs_ctxs), torch.from_numpy(act_horizons)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -483,6 +547,9 @@ def build_model(arch, state_dim, action_dim, seq_len, d_model, n_heads, n_layers
 def train(tr_obs, tr_act, va_obs, va_act,
           tr_ep_starts=None, va_ep_starts=None,
           arch='transformer',
+          binary_gripper=False, bce_weight=2.0,
+          ddpm_steps=100, denoiser_hidden=512,
+          horizon=16, n_obs_steps=2, n_action_steps=8,
           seq_len=16, d_model=256, n_heads=8, n_layers=4, dropout=0.1,
           lr=3e-4, weight_decay=1e-4, grad_clip=1.0,
           max_epochs=150, patience=20, batch_size=128,
@@ -500,10 +567,68 @@ def train(tr_obs, tr_act, va_obs, va_act,
     static_mask = tr_act.std(0) < STATIC_STD_THRESH
     static_vals = act_mean.clone()
 
+    # Raw gripper labels for binary head (before normalization)
+    tr_raw_grip = tr_act[:, GRIPPER_DIM].clone()
+    va_raw_grip = va_act[:, GRIPPER_DIM].clone()
+
     tr_obs_n = (tr_obs - obs_mean) / obs_std
     va_obs_n = (va_obs - obs_mean) / obs_std
     tr_act_n = (tr_act - act_mean) / act_std
     va_act_n = (va_act - act_mean) / act_std
+
+    # ── U-Net diffusion: windowed action-horizon training ──────────────────
+    if arch == 'unet':
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        print('Building U-Net windowed tensors...', flush=True)
+        tr_ctx, tr_ah = build_unet_tensors(tr_obs_n, tr_act_n, horizon, n_obs_steps, tr_ep_starts)
+        va_ctx, va_ah = build_unet_tensors(va_obs_n, va_act_n, horizon, n_obs_steps, va_ep_starts)
+        print(f'  train={len(tr_ctx):,}  val={len(va_ctx):,}', flush=True)
+        tr_ctx = tr_ctx.to(device); tr_ah = tr_ah.to(device)
+        va_ctx = va_ctx.to(device); va_ah = va_ah.to(device)
+
+        diff_scheduler = DDPMScheduler(num_train_steps=ddpm_steps, beta_schedule='squared_cosine')
+        model = build_model(arch, state_dim, action_dim, seq_len, d_model, n_heads, n_layers,
+                            dropout, horizon=horizon, n_obs_steps=n_obs_steps).to(device)
+        opt   = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
+        sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=max_epochs)
+
+        best_val = float('inf'); best_state = None; wait = 0
+        M = len(tr_ctx)
+        for epoch in range(max_epochs):
+            model.train()
+            perm = torch.randperm(M, device=device)
+            ep_loss = 0.0; nb = 0
+            for b in range(0, M - batch_size + 1, batch_size):
+                idx = perm[b:b+batch_size]
+                ctx_b = tr_ctx[idx]; ah_b = tr_ah[idx]
+                noise   = torch.randn_like(ah_b)
+                t       = torch.randint(0, ddpm_steps, (len(idx),), device=device)
+                noisy   = diff_scheduler.add_noise(ah_b, noise, t)
+                loss    = nn.functional.mse_loss(model(noisy, ctx_b, t), noise)
+                opt.zero_grad(); loss.backward()
+                nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+                opt.step()
+                ep_loss += loss.item(); nb += 1
+            sched.step()
+            model.eval()
+            with torch.no_grad():
+                va_noise = torch.randn_like(va_ah)
+                va_t     = torch.randint(0, ddpm_steps, (len(va_ctx),), device=device)
+                va_noisy = diff_scheduler.add_noise(va_ah, va_noise, va_t)
+                vl = nn.functional.mse_loss(model(va_noisy, va_ctx, va_t), va_noise).item()
+            print(f'  Epoch {epoch+1:4d}/{max_epochs}  train={ep_loss/nb:.5f}  val={vl:.5f}  '
+                  f'lr={sched.get_last_lr()[0]:.2e}', flush=True)
+            if vl < best_val:
+                best_val = vl; best_state = deepcopy(model.state_dict()); wait = 0
+            else:
+                wait += 1
+                if wait >= patience:
+                    print(f'\nEarly stopping (epoch {epoch+1}, best val={best_val:.5f})', flush=True)
+                    break
+        model.load_state_dict(best_state)
+        model.eval()
+        print(f'Best val loss: {best_val:.5f}', flush=True)
+        return model, obs_mean, obs_std, act_mean, act_std, static_mask, static_vals
 
     print('Building sequence tensors...', flush=True)
     t0 = time.time()
@@ -511,18 +636,39 @@ def train(tr_obs, tr_act, va_obs, va_act,
     va_seq, va_msk, va_a = build_seq_tensors(va_obs_n, va_act_n, seq_len, va_ep_starts)
     print(f'  train={len(tr_seq):,}  val={len(va_seq):,}  ({time.time()-t0:.1f}s)', flush=True)
 
-    # Per-dim loss weights — upweight gripper dim
-    w = torch.ones(action_dim, device=device)
-    w[GRIPPER_DIM] = gripper_weight
-
-    def loss_fn(pred, target):
-        return (nn.functional.smooth_l1_loss(pred, target, reduction='none') * w).mean()
-
     tr_seq = tr_seq.to(device); tr_msk = tr_msk.to(device); tr_a = tr_a.to(device)
     va_seq = va_seq.to(device); va_msk = va_msk.to(device); va_a = va_a.to(device)
 
-    model = build_model(arch, state_dim, action_dim, seq_len,
-                        d_model, n_heads, n_layers, dropout).to(device)
+    # Gripper labels for binary head: {-1,+1} → {0,1}
+    tr_grip_lbl = ((tr_raw_grip + 1.0) / 2.0).to(device)
+    va_grip_lbl = ((va_raw_grip + 1.0) / 2.0).to(device)
+
+    # Per-dim loss weights (continuous dims only for non-binary, full for standard)
+    if binary_gripper:
+        w = torch.ones(action_dim - 1, device=device)   # 11 continuous dims
+    else:
+        w = torch.ones(action_dim, device=device)
+        w[GRIPPER_DIM] = gripper_weight
+
+    def loss_fn_standard(pred, target):
+        return (nn.functional.smooth_l1_loss(pred, target, reduction='none') * w).mean()
+
+    def loss_fn_binary(pred_cont, grip_logit, target, grip_label):
+        huber = (nn.functional.smooth_l1_loss(
+            pred_cont, target[:, :action_dim-1], reduction='none') * w).mean()
+        bce = nn.functional.binary_cross_entropy_with_logits(
+            grip_logit.squeeze(-1), grip_label)
+        return huber + bce_weight * bce
+
+    # Diffusion scheduler (only used when arch=='diffusion')
+    diff_scheduler = None
+    if arch == 'diffusion':
+        diff_scheduler = DDPMScheduler(num_train_steps=ddpm_steps,
+                                       beta_schedule='squared_cosine')
+
+    model = build_model(arch, state_dim, action_dim, seq_len, d_model, n_heads, n_layers,
+                        dropout, binary_gripper=binary_gripper,
+                        denoiser_hidden=denoiser_hidden).to(device)
     opt   = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=max_epochs)
 
@@ -533,9 +679,23 @@ def train(tr_obs, tr_act, va_obs, va_act,
         model.train()
         perm = torch.randperm(N, device=device)
         ep_loss = 0.0; nb = 0
+
         for b in range(0, N - batch_size + 1, batch_size):
             idx = perm[b:b+batch_size]
-            loss = loss_fn(model(tr_seq[idx], tr_msk[idx]), tr_a[idx])
+            seq_b, msk_b, act_b = tr_seq[idx], tr_msk[idx], tr_a[idx]
+
+            if arch == 'diffusion':
+                context = model.encode(seq_b, msk_b)
+                noise   = torch.randn_like(act_b)
+                t       = torch.randint(0, ddpm_steps, (len(idx),), device=device)
+                noisy   = diff_scheduler.add_noise(act_b, noise, t)
+                loss    = nn.functional.mse_loss(model(noisy, context, t), noise)
+            elif binary_gripper:
+                pred_cont, grip_logit = model(seq_b, msk_b)
+                loss = loss_fn_binary(pred_cont, grip_logit, act_b, tr_grip_lbl[idx])
+            else:
+                loss = loss_fn_standard(model(seq_b, msk_b), act_b)
+
             opt.zero_grad(); loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
             opt.step()
@@ -544,7 +704,19 @@ def train(tr_obs, tr_act, va_obs, va_act,
 
         model.eval()
         with torch.no_grad():
-            vl = loss_fn(model(va_seq, va_msk), va_a).item()
+            if arch == 'diffusion':
+                _va_noise = torch.randn(len(va_a), action_dim, device=device)
+                _va_t     = torch.randint(0, ddpm_steps, (len(va_a),), device=device)
+                _va_ctx   = model.encode(va_seq, va_msk)
+                _va_noisy = diff_scheduler.add_noise(va_a, _va_noise, _va_t)
+                vl = nn.functional.mse_loss(
+                    model(_va_noisy, _va_ctx, _va_t), _va_noise).item()
+            elif binary_gripper:
+                pred_cont_v, grip_logit_v = model(va_seq, va_msk)
+                vl = loss_fn_binary(pred_cont_v, grip_logit_v,
+                                    va_a, va_grip_lbl).item()
+            else:
+                vl = loss_fn_standard(model(va_seq, va_msk), va_a).item()
 
         print(f'  Epoch {epoch+1:4d}/{max_epochs}  '
               f'train={ep_loss/nb:.5f}  val={vl:.5f}  '
@@ -562,6 +734,120 @@ def train(tr_obs, tr_act, va_obs, va_act,
     model.eval()
     print(f'Best val loss: {best_val:.5f}', flush=True)
     return model, obs_mean, obs_std, act_mean, act_std, static_mask, static_vals
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Split-gripper training (two independent models, no shared gradient)
+# ═══════════════════════════════════════════════════════════════════════════
+
+def train_split_gripper(tr_obs, tr_act, va_obs, va_act,
+                        tr_ep_starts=None, va_ep_starts=None,
+                        seq_len=16, d_model=256, n_heads=8, n_layers=4, dropout=0.1,
+                        lr=3e-4, weight_decay=1e-4, grad_clip=1.0,
+                        max_epochs=150, patience=20, batch_size=128):
+    """Train arm BCTransformer and GripperMLP as two completely independent models."""
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    state_dim  = tr_obs.shape[-1]
+    action_dim = tr_act.shape[-1]
+
+    obs_mean = tr_obs.mean(0); obs_std = tr_obs.std(0).clamp(min=1e-3)
+    act_mean = tr_act.mean(0); act_std = tr_act.std(0).clamp(min=1e-3)
+    static_mask = tr_act.std(0) < STATIC_STD_THRESH
+    static_vals = act_mean.clone()
+
+    tr_obs_n = (tr_obs - obs_mean) / obs_std
+    va_obs_n = (va_obs - obs_mean) / obs_std
+    tr_act_n = (tr_act - act_mean) / act_std
+    va_act_n = (va_act - act_mean) / act_std
+
+    # Raw gripper labels: {-1,+1} → {0,1}
+    tr_grip = ((tr_act[:, GRIPPER_DIM] + 1.0) / 2.0)
+    va_grip = ((va_act[:, GRIPPER_DIM] + 1.0) / 2.0)
+
+    print('Building sequence tensors...', flush=True)
+    tr_seq, tr_msk, tr_a = build_seq_tensors(tr_obs_n, tr_act_n, seq_len, tr_ep_starts)
+    va_seq, va_msk, va_a = build_seq_tensors(va_obs_n, va_act_n, seq_len, va_ep_starts)
+    print(f'  train={len(tr_seq):,}  val={len(va_seq):,}', flush=True)
+
+    tr_seq = tr_seq.to(device); tr_msk = tr_msk.to(device)
+    tr_a   = tr_a.to(device);   tr_grip = tr_grip.to(device)
+    va_seq = va_seq.to(device); va_msk = va_msk.to(device)
+    va_a   = va_a.to(device);   va_grip = va_grip.to(device)
+
+    # Arm model: BCTransformer → (action_dim-1) continuous dims (no gripper)
+    arm_model = BCTransformer(state_dim, action_dim - 1, seq_len, d_model,
+                               n_heads, n_layers, dropout).to(device)
+    # Gripper model: GripperMLP → 1-dim logit
+    grip_model = GripperMLP(state_dim, hidden=128, dropout=dropout).to(device)
+
+    # Per-dim Huber weights for arm (dims 0:GRIPPER_DIM + GRIPPER_DIM+1:end)
+    arm_act_indices = list(range(GRIPPER_DIM)) + list(range(GRIPPER_DIM + 1, action_dim))
+    w_arm = torch.ones(action_dim - 1, device=device)
+
+    arm_opt  = torch.optim.AdamW(arm_model.parameters(),  lr=lr, weight_decay=weight_decay)
+    grip_opt = torch.optim.AdamW(grip_model.parameters(), lr=lr, weight_decay=weight_decay)
+    arm_sched  = torch.optim.lr_scheduler.CosineAnnealingLR(arm_opt,  T_max=max_epochs)
+    grip_sched = torch.optim.lr_scheduler.CosineAnnealingLR(grip_opt, T_max=max_epochs)
+
+    # Target for arm: all action dims except gripper
+    tr_arm_tgt = tr_a[:, arm_act_indices]
+    va_arm_tgt = va_a[:, arm_act_indices]
+
+    best_val = float('inf'); best_arm_state = None; best_grip_state = None; wait = 0
+    N = len(tr_seq)
+
+    for epoch in range(max_epochs):
+        arm_model.train(); grip_model.train()
+        perm = torch.randperm(N, device=device)
+        ep_arm_loss = ep_grip_loss = 0.0; nb = 0
+        for b in range(0, N - batch_size + 1, batch_size):
+            idx = perm[b:b+batch_size]
+            seq_b, msk_b = tr_seq[idx], tr_msk[idx]
+            # Arm step
+            arm_pred = arm_model(seq_b, msk_b)
+            arm_loss = (nn.functional.smooth_l1_loss(arm_pred, tr_arm_tgt[idx],
+                                                     reduction='none') * w_arm).mean()
+            arm_opt.zero_grad(); arm_loss.backward()
+            nn.utils.clip_grad_norm_(arm_model.parameters(), grad_clip)
+            arm_opt.step()
+            # Gripper step (completely independent)
+            grip_logit = grip_model(seq_b, msk_b)
+            grip_loss = nn.functional.binary_cross_entropy_with_logits(
+                grip_logit.squeeze(-1), tr_grip[idx])
+            grip_opt.zero_grad(); grip_loss.backward()
+            nn.utils.clip_grad_norm_(grip_model.parameters(), grad_clip)
+            grip_opt.step()
+            ep_arm_loss += arm_loss.item(); ep_grip_loss += grip_loss.item(); nb += 1
+        arm_sched.step(); grip_sched.step()
+
+        arm_model.eval(); grip_model.eval()
+        with torch.no_grad():
+            va_arm_pred  = arm_model(va_seq, va_msk)
+            va_grip_pred = grip_model(va_seq, va_msk)
+            arm_vl  = (nn.functional.smooth_l1_loss(va_arm_pred, va_arm_tgt,
+                                                    reduction='none') * w_arm).mean().item()
+            grip_vl = nn.functional.binary_cross_entropy_with_logits(
+                va_grip_pred.squeeze(-1), va_grip).item()
+            vl = arm_vl + grip_vl
+        print(f'  Epoch {epoch+1:4d}/{max_epochs}  arm={ep_arm_loss/nb:.5f}  '
+              f'grip={ep_grip_loss/nb:.5f}  val={vl:.5f}', flush=True)
+        if vl < best_val:
+            best_val = vl
+            best_arm_state  = deepcopy(arm_model.state_dict())
+            best_grip_state = deepcopy(grip_model.state_dict())
+            wait = 0
+        else:
+            wait += 1
+            if wait >= patience:
+                print(f'\nEarly stopping (epoch {epoch+1}, best val={best_val:.5f})', flush=True)
+                break
+
+    arm_model.load_state_dict(best_arm_state)
+    grip_model.load_state_dict(best_grip_state)
+    arm_model.eval(); grip_model.eval()
+    print(f'Best val loss: {best_val:.5f}', flush=True)
+    return (arm_model, grip_model, obs_mean, obs_std, act_mean, act_std,
+            static_mask, static_vals, arm_act_indices)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -610,6 +896,26 @@ def extract_state(obs, env, active_handle_site):
 # Evaluation
 # ═══════════════════════════════════════════════════════════════════════════
 
+def _any_door_open(env, th=0.90):
+    """Return True if ANY cabinet door joint is ≥ th open (professor's recommendation).
+
+    Falls back to env._check_success() if fixture/joints unavailable.
+    """
+    try:
+        fxtr = getattr(env, 'fxtr', None)
+        if fxtr is None:
+            return env._check_success()
+        joint_names = getattr(fxtr, 'door_joint_names', [])
+        if not joint_names:
+            return env._check_success()
+        joint_state = fxtr.get_joint_state(env, joint_names)
+        if not joint_state:
+            return env._check_success()
+        return any(v >= th for v in joint_state.values())
+    except Exception:
+        return env._check_success()
+
+
 def _eval_worker(args):
     """Spawn-safe eval worker: loads checkpoint from disk, creates own env, runs episode subset."""
     ckpt_path, ep_indices, seq_len, max_steps, split, base_seed = args
@@ -619,27 +925,68 @@ def _eval_worker(args):
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 
     ckpt = torch.load(ckpt_path, weights_only=False, map_location='cpu')
-    arch = ckpt.get('arch', 'transformer')
-    feat_indices = ckpt.get('feat_indices', None)
+    arch           = ckpt.get('arch', 'transformer')
+    feat_indices   = ckpt.get('feat_indices', None)
+    binary_gripper = ckpt.get('binary_gripper', False)
+    ddpm_steps     = ckpt.get('ddpm_steps', 100)
+    ddim_steps     = ckpt.get('ddim_steps', 10)
+    n_obs_steps    = ckpt.get('n_obs_steps', 2)
+    horizon        = ckpt.get('horizon', 16)
+    n_action_steps = ckpt.get('n_action_steps', 8)
     mkw = ckpt['model_kwargs']
-    model = build_model(arch, **mkw)
-    model.load_state_dict(ckpt['model_state'])
-    model.eval()
-    obs_mean_np = ckpt['obs_mean'].numpy()
-    obs_std_np  = ckpt['obs_std'].numpy()
-    act_mean_np = ckpt['act_mean'].numpy()
-    act_std_np  = ckpt['act_std'].numpy()
+    obs_mean_np = ckpt['obs_mean'].cpu().numpy()
+    obs_std_np  = ckpt['obs_std'].cpu().numpy()
+    act_mean_np = ckpt['act_mean'].cpu().numpy()
+    act_std_np  = ckpt['act_std'].cpu().numpy()
     static_np   = ckpt['static_mask'].numpy()
     svals_np    = ckpt['static_vals'].numpy()
-
-    # Model's actual input dim (may differ from STATE_DIM with feat subsets)
     model_state_dim = mkw['state_dim']
+    action_dim      = mkw['action_dim']
 
-    # Warm up model to trigger any JIT / lazy initialization before timed episodes
-    _dummy_seq  = torch.zeros(1, seq_len, model_state_dim)
-    _dummy_mask = torch.ones(1, seq_len, dtype=torch.bool)
-    with torch.no_grad():
-        model(_dummy_seq, _dummy_mask)
+    # Load model(s)
+    if arch == 'split_gripper':
+        arm_model  = build_model('transformer', binary_gripper=False,
+                                 **{**mkw, 'action_dim': action_dim - 1})
+        grip_model = GripperMLP(model_state_dim, hidden=128,
+                                dropout=mkw.get('dropout', 0.1))
+        arm_model.load_state_dict(ckpt['model_state'])
+        grip_model.load_state_dict(ckpt['grip_model_state'])
+        arm_model.eval(); grip_model.eval()
+        arm_act_indices = ckpt.get('arm_act_indices', list(range(GRIPPER_DIM)) +
+                                   list(range(GRIPPER_DIM + 1, action_dim)))
+        model = None  # not used for split_gripper
+    else:
+        model = build_model(arch, binary_gripper=binary_gripper, **mkw)
+        model.load_state_dict(ckpt['model_state'])
+        model.eval()
+
+    # Diffusion scheduler
+    diff_scheduler = None
+    if arch in ('diffusion', 'unet'):
+        diff_scheduler = DDPMScheduler(num_train_steps=ddpm_steps,
+                                       beta_schedule='squared_cosine')
+
+    # Warm up model
+    if arch == 'split_gripper':
+        _dummy_seq  = torch.zeros(1, seq_len, model_state_dim)
+        _dummy_mask = torch.ones(1, seq_len, dtype=torch.bool)
+        with torch.no_grad():
+            arm_model(_dummy_seq, _dummy_mask)
+            grip_model(_dummy_seq, _dummy_mask)
+    elif arch == 'unet':
+        _dummy_ctx = torch.zeros(1, n_obs_steps * model_state_dim)
+        _dummy_act = torch.zeros(1, horizon, action_dim)
+        with torch.no_grad():
+            model(_dummy_act, _dummy_ctx, torch.zeros(1, dtype=torch.long))
+    else:
+        _dummy_seq  = torch.zeros(1, seq_len, model_state_dim)
+        _dummy_mask = torch.ones(1, seq_len, dtype=torch.bool)
+        with torch.no_grad():
+            if arch == 'diffusion':
+                _ctx = model.encode(_dummy_seq, _dummy_mask)
+                model(torch.zeros(1, action_dim), _ctx, torch.zeros(1, dtype=torch.long))
+            else:
+                model(_dummy_seq, _dummy_mask)
 
     env = create_env(split=split, seed=base_seed + ep_indices[0])
 
@@ -667,38 +1014,98 @@ def _eval_worker(args):
                     ctrl.reset()
             obs = env._get_observations()
 
-        active_site = None
-        history = deque(maxlen=seq_len)
-        success = False
-        last_state_full = None  # always 44-dim for hdist metric
+        active_site    = None
+        history        = deque(maxlen=seq_len)       # used by transformer/mlp/diffusion
+        obs_deque      = deque(maxlen=n_obs_steps)   # used by unet
+        action_queue   = deque()                     # used by unet
+        success        = False
+        last_state_full = None
 
-        # Prime first state before the loop
         state_full, active_site = extract_state(obs, env, active_site)
 
         for step in range(max_steps):
             last_state_full = state_full
-            # Slice to model's feature subset if needed
             state = state_full[feat_indices] if feat_indices is not None else state_full
             state_n = (state - obs_mean_np) / obs_std_np
-            history.append(state_n)
-            L = len(history)
 
-            # Fill pre-allocated buffers in-place
-            seq_buf[:] = 0.0
-            seq_buf[-L:] = np.stack(list(history))
-            mask_buf[:] = True
-            mask_buf[-L:] = False
+            # ── U-Net: receding-horizon action chunking ─────────────────────
+            if arch == 'unet':
+                obs_deque.append(state_n)
+                if len(action_queue) == 0:
+                    while len(obs_deque) < n_obs_steps:
+                        obs_deque.appendleft(obs_deque[0])
+                    obs_ctx = torch.from_numpy(
+                        np.concatenate(list(obs_deque))).unsqueeze(0)  # (1, n_obs*D)
+                    x_T = torch.randn(1, horizon, action_dim)
+                    with torch.no_grad():
+                        pred_h = diff_scheduler.denoise_ddim(
+                            model, x_T, obs_ctx,
+                            num_inference_steps=ddim_steps)           # (1,H,A)
+                    pred_np = pred_h[0].numpy()                       # (H,A)
+                    for h in range(min(n_action_steps, horizon)):
+                        raw_h = pred_np[h] * act_std_np + act_mean_np
+                        raw_h[static_np] = svals_np[static_np]
+                        action_queue.append(np.clip(raw_h, -1.0, 1.0))
+                raw_act = action_queue.popleft()
 
-            with torch.no_grad():
-                pred_n = model(seq_t, mask_t).numpy()[0]
+            # ── Split-gripper: arm + independent gripper ────────────────────
+            elif arch == 'split_gripper':
+                history.append(state_n)
+                L = len(history)
+                seq_buf[:] = 0.0; seq_buf[-L:] = np.stack(list(history))
+                mask_buf[:] = True; mask_buf[-L:] = False
+                with torch.no_grad():
+                    arm_pred_n  = arm_model(seq_t, mask_t).numpy()[0]   # (action_dim-1,)
+                    grip_logit  = grip_model(seq_t, mask_t)
+                    grip_binary = 1.0 if grip_logit.sigmoid().item() > 0.5 else 0.0
+                raw_act = np.empty(action_dim, dtype=np.float32)
+                arm_raw = arm_pred_n * act_std_np[arm_act_indices] + act_mean_np[arm_act_indices]
+                arm_raw[static_np[arm_act_indices]] = svals_np[arm_act_indices][
+                    static_np[arm_act_indices]]
+                raw_act[arm_act_indices]  = np.clip(arm_raw, -1.0, 1.0)
+                raw_act[GRIPPER_DIM]      = np.clip(
+                    grip_binary * act_std_np[GRIPPER_DIM] + act_mean_np[GRIPPER_DIM], -1.0, 1.0)
 
-            raw_act = pred_n * act_std_np + act_mean_np
-            raw_act[static_np] = svals_np[static_np]
-            raw_act = np.clip(raw_act, -1.0, 1.0)
+            # ── Standard transformer / MLP / old diffusion ──────────────────
+            else:
+                history.append(state_n)
+                L = len(history)
+                seq_buf[:] = 0.0; seq_buf[-L:] = np.stack(list(history))
+                mask_buf[:] = True; mask_buf[-L:] = False
+                with torch.no_grad():
+                    if arch == 'diffusion':
+                        _ctx   = model.encode(seq_t, mask_t)
+                        _x_T   = torch.randn(1, action_dim)
+                        pred_n = diff_scheduler.denoise_ddim(
+                            model, _x_T, _ctx,
+                            num_inference_steps=ddim_steps).numpy()[0]
+                    elif binary_gripper:
+                        pred_cont, grip_logit = model(seq_t, mask_t)
+                        pred_cont_np = pred_cont.numpy()[0]
+                        grip_prob    = float(grip_logit.sigmoid().numpy()[0, 0])
+                        pred_n       = np.empty(action_dim, dtype=np.float32)
+                        pred_n[:action_dim-1] = pred_cont_np
+                        pred_n[action_dim-1]  = grip_prob
+                    else:
+                        pred_n = model(seq_t, mask_t).numpy()[0]
+                if binary_gripper:
+                    raw_act = np.empty(action_dim, dtype=np.float32)
+                    raw_act[:action_dim-1] = (pred_n[:action_dim-1]
+                                              * act_std_np[:action_dim-1]
+                                              + act_mean_np[:action_dim-1])
+                    raw_act[action_dim-1]  = pred_n[action_dim-1]
+                    raw_act[:action_dim-1][static_np[:action_dim-1]] = \
+                        svals_np[:action_dim-1][static_np[:action_dim-1]]
+                    raw_act[:action_dim-1] = np.clip(raw_act[:action_dim-1], -1.0, 1.0)
+                else:
+                    raw_act = pred_n * act_std_np + act_mean_np
+                    raw_act[static_np] = svals_np[static_np]
+                    raw_act = np.clip(raw_act, -1.0, 1.0)
+
             env_act = np.clip(dataset_action_to_env_action(raw_act), -1.0, 1.0)
             obs, _, _, _ = env.step(env_act)
 
-            if env._check_success():
+            if _any_door_open(env):
                 success = True
                 state_full, active_site = extract_state(obs, env, active_site)
                 break
@@ -760,8 +1167,26 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--eval_only',  action='store_true')
     parser.add_argument('--checkpoint', default=None)
-    parser.add_argument('--arch',        default='transformer', choices=['transformer', 'mlp'])
-    parser.add_argument('--feat_subset', default='full', choices=['full', 'no_handle', 'handle_only'])
+    parser.add_argument('--arch',        default='transformer',
+                        choices=['transformer', 'mlp', 'diffusion', 'unet', 'split_gripper'])
+    parser.add_argument('--feat_subset', default='full',
+                        choices=['full', 'no_handle', 'handle_only'])
+    parser.add_argument('--binary_gripper', action='store_true',
+                        help='Separate BCE classification head for gripper dim')
+    parser.add_argument('--bce_weight',  type=float, default=2.0,
+                        help='Weight on BCE gripper loss (only with --binary_gripper)')
+    parser.add_argument('--ddpm_steps',  type=int,   default=100,
+                        help='DDPM training timesteps T (only with --arch diffusion)')
+    parser.add_argument('--ddim_steps',  type=int,   default=10,
+                        help='DDIM inference steps (only with --arch diffusion)')
+    parser.add_argument('--denoiser_hidden', type=int, default=512,
+                        help='Hidden dim for MLP denoiser (only with --arch diffusion)')
+    parser.add_argument('--horizon',      type=int, default=16,
+                        help='Action prediction horizon (unet only)')
+    parser.add_argument('--n_obs_steps',  type=int, default=2,
+                        help='Number of obs frames to concat as context (unet only)')
+    parser.add_argument('--n_action_steps', type=int, default=8,
+                        help='Actions to execute per replan (unet only)')
     parser.add_argument('--n_eps',          type=int,   default=20)
     parser.add_argument('--max_steps',      type=int,   default=500)
     parser.add_argument('--n_eval_workers', type=int,   default=4)
@@ -780,7 +1205,14 @@ def main():
     parser.add_argument('--seed',       type=int,   default=0)
     args = parser.parse_args()
 
-    ckpt_path = Path(args.checkpoint) if args.checkpoint else CKPT_PATH
+    if args.checkpoint:
+        ckpt_path = Path(args.checkpoint)
+    elif args.arch == 'unet':
+        ckpt_path = SAVE_DIR / 'bc_unet_best.pt'
+    elif args.arch == 'split_gripper':
+        ckpt_path = SAVE_DIR / 'bc_split_grip_best.pt'
+    else:
+        ckpt_path = CKPT_PATH
     device    = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     feat_indices = FEATURE_CONFIGS[args.feat_subset]
@@ -800,37 +1232,88 @@ def main():
         print(f'Train {len(tr_obs):,}  Val {len(va_obs):,}', flush=True)
 
         print('\n=== Training ===', flush=True)
-        model, obs_mean, obs_std, act_mean, act_std, static_mask, static_vals = train(
-            tr_obs, tr_act, va_obs, va_act,
-            tr_ep_starts=tr_ep_starts, va_ep_starts=va_ep_starts,
-            arch=args.arch,
-            seq_len=args.seq_len, d_model=args.d_model,
-            n_heads=args.n_heads, n_layers=args.n_layers,
-            dropout=args.dropout, lr=args.lr,
-            max_epochs=args.epochs, patience=args.patience,
-            batch_size=args.batch_size, gripper_weight=args.gripper_weight,
-        )
-
         ckpt_path.parent.mkdir(parents=True, exist_ok=True)
-        torch.save(dict(
-            model_state=model.state_dict(),
-            arch=args.arch,
-            feat_indices=feat_indices,
-            model_kwargs=dict(state_dim=obs_all.shape[-1], action_dim=actions.shape[-1],
-                              seq_len=args.seq_len, d_model=args.d_model,
-                              n_heads=args.n_heads, n_layers=args.n_layers,
-                              dropout=args.dropout),
-            obs_mean=obs_mean, obs_std=obs_std,
-            act_mean=act_mean, act_std=act_std,
-            static_mask=static_mask, static_vals=static_vals,
-        ), ckpt_path)
+
+        if args.arch == 'split_gripper':
+            (arm_model, grip_model, obs_mean, obs_std,
+             act_mean, act_std, static_mask, static_vals,
+             arm_act_indices) = train_split_gripper(
+                tr_obs, tr_act, va_obs, va_act,
+                tr_ep_starts=tr_ep_starts, va_ep_starts=va_ep_starts,
+                seq_len=args.seq_len, d_model=args.d_model,
+                n_heads=args.n_heads, n_layers=args.n_layers,
+                dropout=args.dropout, lr=args.lr,
+                max_epochs=args.epochs, patience=args.patience,
+                batch_size=args.batch_size,
+            )
+            torch.save(dict(
+                model_state=arm_model.state_dict(),
+                grip_model_state=grip_model.state_dict(),
+                arch='split_gripper',
+                feat_indices=feat_indices,
+                binary_gripper=False,
+                arm_act_indices=arm_act_indices,
+                n_obs_steps=args.n_obs_steps,
+                horizon=args.horizon,
+                n_action_steps=args.n_action_steps,
+                ddpm_steps=args.ddpm_steps,
+                ddim_steps=args.ddim_steps,
+                model_kwargs=dict(state_dim=obs_all.shape[-1],
+                                  action_dim=actions.shape[-1],
+                                  seq_len=args.seq_len, d_model=args.d_model,
+                                  n_heads=args.n_heads, n_layers=args.n_layers,
+                                  dropout=args.dropout,
+                                  denoiser_hidden=args.denoiser_hidden),
+                obs_mean=obs_mean, obs_std=obs_std,
+                act_mean=act_mean, act_std=act_std,
+                static_mask=static_mask, static_vals=static_vals,
+            ), ckpt_path)
+            model = arm_model  # for evaluate() signature
+        else:
+            model, obs_mean, obs_std, act_mean, act_std, static_mask, static_vals = train(
+                tr_obs, tr_act, va_obs, va_act,
+                tr_ep_starts=tr_ep_starts, va_ep_starts=va_ep_starts,
+                arch=args.arch,
+                binary_gripper=args.binary_gripper, bce_weight=args.bce_weight,
+                ddpm_steps=args.ddpm_steps, denoiser_hidden=args.denoiser_hidden,
+                horizon=args.horizon, n_obs_steps=args.n_obs_steps,
+                n_action_steps=args.n_action_steps,
+                seq_len=args.seq_len, d_model=args.d_model,
+                n_heads=args.n_heads, n_layers=args.n_layers,
+                dropout=args.dropout, lr=args.lr,
+                max_epochs=args.epochs, patience=args.patience,
+                batch_size=args.batch_size, gripper_weight=args.gripper_weight,
+            )
+            torch.save(dict(
+                model_state=model.state_dict(),
+                arch=args.arch,
+                feat_indices=feat_indices,
+                binary_gripper=args.binary_gripper,
+                ddpm_steps=args.ddpm_steps,
+                ddim_steps=args.ddim_steps,
+                n_obs_steps=args.n_obs_steps,
+                horizon=args.horizon,
+                n_action_steps=args.n_action_steps,
+                model_kwargs=dict(state_dim=obs_all.shape[-1],
+                                  action_dim=actions.shape[-1],
+                                  seq_len=args.seq_len, d_model=args.d_model,
+                                  n_heads=args.n_heads, n_layers=args.n_layers,
+                                  dropout=args.dropout,
+                                  denoiser_hidden=args.denoiser_hidden,
+                                  horizon=args.horizon,
+                                  n_obs_steps=args.n_obs_steps),
+                obs_mean=obs_mean, obs_std=obs_std,
+                act_mean=act_mean, act_std=act_std,
+                static_mask=static_mask, static_vals=static_vals,
+            ), ckpt_path)
         print(f'Checkpoint saved → {ckpt_path}', flush=True)
 
     else:
         ckpt = torch.load(ckpt_path, weights_only=False, map_location=device)
-        arch_loaded = ckpt.get('arch', 'transformer')
-        feat_indices = ckpt.get('feat_indices', None)
-        model = build_model(arch_loaded, **ckpt['model_kwargs'])
+        arch_loaded    = ckpt.get('arch', 'transformer')
+        feat_indices   = ckpt.get('feat_indices', None)
+        bg_loaded      = ckpt.get('binary_gripper', False)
+        model = build_model(arch_loaded, binary_gripper=bg_loaded, **ckpt['model_kwargs'])
         model.load_state_dict(ckpt['model_state'])
         model.eval()
         obs_mean    = ckpt['obs_mean']
