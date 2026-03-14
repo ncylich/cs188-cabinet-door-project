@@ -18,3 +18,14 @@ MUJOCO_LOG.TXT
 
 # Lock files
 uv.lock
+
+# Large checkpoint files (too big for git)
+checkpoints/
+
+# Eval and training logs
+eval_*.log
+train_*.log
+all_evals_progress.log
+
+# Downloaded datasets
+robocasa/datasets/
