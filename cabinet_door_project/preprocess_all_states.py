@@ -138,22 +138,23 @@ def process_episode(args):
 def preprocess_all(save_dir="/tmp/diffusion_policy_checkpoints"):
     """Preprocess all episodes and save comprehensive state data."""
     t0 = time.time()
+    os.makedirs(save_dir, exist_ok=True)
+
+    # Auto-generate door positions/quats if missing
+    pos_path  = os.path.join(save_dir, "door_positions.npz")
+    quat_path = os.path.join(save_dir, "door_quats.npz")
+    if not os.path.exists(pos_path) or not os.path.exists(quat_path):
+        logger.info("door_positions.npz or door_quats.npz not found — generating...")
+        from generate_door_positions import generate as _gen_door
+        _gen_door()
 
     # Load existing data
     episodes = load_episodes(get_dataset_path())
-    dp_data = np.load(os.path.join(save_dir, "door_positions.npz"))
+    dp_data = np.load(pos_path)
     door_positions = {int(k): v.astype(np.float32) for k, v in dp_data.items()}
 
-    # Load door quaternions (try multiple cached locations)
-    dq_path = os.path.join(save_dir, "door_quats.npz")
-    if not os.path.exists(dq_path):
-        dq_path = os.path.join(save_dir, "door_quaternions.npz")
-    if os.path.exists(dq_path):
-        dq_data = np.load(dq_path)
-        door_quats = {int(k): v.astype(np.float32) for k, v in dq_data.items()}
-    else:
-        logger.info("Extracting door quaternions from environment...")
-        door_quats = extract_door_quaternions(episodes, save_dir)
+    dq_data = np.load(quat_path)
+    door_quats = {int(k): v.astype(np.float32) for k, v in dq_data.items()}
 
     # Prepare args for parallel processing
     args_list = []
@@ -224,48 +225,117 @@ def preprocess_all(save_dir="/tmp/diffusion_policy_checkpoints"):
     logger.info(f"Feature dimensions: {save_dict['feature_dims']}")
     logger.info(f"Saved to {out_path}")
 
+    validate_preprocessed(save_dict, out_path)
     return save_dict
 
 
+def validate_preprocessed(save_dict=None, path=None):
+    """Validate preprocessed_all_states.pt for correctness."""
+    if save_dict is None:
+        path = path or "/tmp/diffusion_policy_checkpoints/preprocessed_all_states.pt"
+        if not os.path.exists(path):
+            logger.error(f"File not found: {path}")
+            return False
+        save_dict = torch.load(path, weights_only=False)
+
+    ok = True
+    feats      = save_dict['features']
+    actions    = save_dict['actions']
+    ep_bounds  = save_dict['ep_boundaries']  # (N_eps, 3): episode_id, start, end
+
+    N_frames = actions.shape[0]
+    N_eps    = len(ep_bounds)
+
+    # 1. Episode boundaries span exactly all frames with no gaps/overlaps
+    starts = ep_bounds[:, 1].astype(int)
+    ends   = ep_bounds[:, 2].astype(int)
+    if starts[0] != 0:
+        logger.error(f"FAIL: first episode start is {starts[0]}, expected 0")
+        ok = False
+    if ends[-1] != N_frames:
+        logger.error(f"FAIL: last episode end {ends[-1]} != total frames {N_frames}")
+        ok = False
+    gaps = starts[1:] - ends[:-1]
+    if np.any(gaps != 0):
+        bad = np.where(gaps != 0)[0]
+        logger.error(f"FAIL: gaps/overlaps at episode boundaries: {bad[:5]}")
+        ok = False
+
+    # 2. All feature arrays have correct first dimension
+    for name, arr in feats.items():
+        if arr.shape[0] != N_frames:
+            logger.error(f"FAIL: feature '{name}' has {arr.shape[0]} rows, expected {N_frames}")
+            ok = False
+
+    # 3. Feature dims match spec
+    expected_dims = {
+        'proprio': 16, 'door_pos': 3, 'door_quat': 4,
+        'eef_pos': 3,  'eef_quat': 4,
+        'door_to_eef_pos': 3, 'door_to_eef_quat': 4,
+        'gripper_to_door_dist': 1,
+    }
+    for name, dim in expected_dims.items():
+        if name not in feats:
+            logger.error(f"FAIL: missing feature '{name}'")
+            ok = False
+        elif feats[name].shape[-1] != dim:
+            logger.error(f"FAIL: '{name}' dim {feats[name].shape[-1]}, expected {dim}")
+            ok = False
+
+    # 4. No NaN/Inf in any feature or action
+    for name, arr in feats.items():
+        if not torch.isfinite(arr).all():
+            logger.error(f"FAIL: NaN/Inf in feature '{name}'")
+            ok = False
+    if not torch.isfinite(actions).all():
+        logger.error("FAIL: NaN/Inf in actions")
+        ok = False
+
+    # 5. Plausibility: eef_pos z should be > 0 (above ground)
+    eef_z = feats['eef_pos'][:, 2]
+    if (eef_z < 0).any():
+        logger.warning(f"WARN: {(eef_z < 0).sum()} frames with eef z < 0")
+
+    # 6. door_to_eef_pos and gripper_to_door_dist are consistent
+    computed_dist = feats['door_to_eef_pos'].norm(dim=-1, keepdim=True)
+    stored_dist   = feats['gripper_to_door_dist']
+    max_err = (computed_dist - stored_dist).abs().max().item()
+    if max_err > 1e-4:
+        logger.error(f"FAIL: gripper_to_door_dist inconsistent with door_to_eef_pos "
+                     f"(max err {max_err:.6f})")
+        ok = False
+
+    # 7. Door position is static within each episode (variance should be 0)
+    max_door_var = 0.0
+    for _, start, end in ep_bounds:
+        var = feats['door_pos'][int(start):int(end)].var(dim=0).max().item()
+        max_door_var = max(max_door_var, var)
+    if max_door_var > 1e-8:
+        logger.error(f"FAIL: door_pos varies within episodes (max var {max_door_var:.2e})")
+        ok = False
+
+    if ok:
+        logger.info(f"Validation PASSED: {N_eps} episodes, {N_frames} frames, "
+                    f"features {list(expected_dims.keys())}")
+    else:
+        logger.error("Validation FAILED — see errors above")
+    return ok
+
+
 def extract_door_quaternions(episodes, save_dir):
-    """Extract door_obj_quat for each episode from the environment."""
-    import json
-    import robocasa
-    from robocasa.utils.env_utils import create_env as _create_env
+    """Deprecated: use generate_door_positions.generate() instead.
 
-    ds_path = get_dataset_path()
-    meta_path = os.path.join(ds_path, "extras", "ep_meta.json")
-    with open(meta_path) as f:
-        ep_meta_all = json.load(f)
-
-    env = _create_env(
-        env_name="OpenCabinet",
-        render_onscreen=False,
-        seed=0,
-        split="pretrain",
-        camera_widths=256,
-        camera_heights=256,
+    Retained for backward compatibility — delegates to the canonical generator
+    which correctly uses per-episode ep_meta.json + model.xml.gz.
+    """
+    logger.warning(
+        "extract_door_quaternions() is deprecated. "
+        "Call generate_door_positions.generate() directly."
     )
-
-    door_quats = {}
-    for ep in episodes:
-        eid = ep['episode_index']
-        meta_key = f"episode_{eid}"
-        if meta_key in ep_meta_all:
-            ep_meta = ep_meta_all[meta_key]
-            env.set_ep_meta(ep_meta)
-        obs = env.reset()
-        dq = obs['door_obj_quat'].flatten().astype(np.float32)
-        door_quats[eid] = dq
-
-    env.close()
-
-    # Save for future use
-    np.savez(os.path.join(save_dir, "door_quaternions.npz"),
-             **{str(k): v for k, v in door_quats.items()})
-    logger.info(f"Saved door quaternions for {len(door_quats)} episodes")
-
-    return door_quats
+    from generate_door_positions import generate as _gen
+    _gen()
+    dq_data = np.load(os.path.join(save_dir, "door_quats.npz"))
+    return {int(k): v.astype(np.float32) for k, v in dq_data.items()}
 
 
 def build_handle_cache(lerobot_root, eef_pos_all, ep_boundaries,
@@ -390,4 +460,15 @@ def build_handle_cache(lerobot_root, eef_pos_all, ep_boundaries,
 
 
 if __name__ == "__main__":
-    preprocess_all()
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--validate', action='store_true',
+                        help='Validate existing preprocessed_all_states.pt only')
+    parser.add_argument('--save_dir', default='/tmp/diffusion_policy_checkpoints')
+    args = parser.parse_args()
+
+    if args.validate:
+        ok = validate_preprocessed(path=os.path.join(args.save_dir, 'preprocessed_all_states.pt'))
+        sys.exit(0 if ok else 1)
+    else:
+        preprocess_all(save_dir=args.save_dir)

@@ -1313,7 +1313,11 @@ def main():
         arch_loaded    = ckpt.get('arch', 'transformer')
         feat_indices   = ckpt.get('feat_indices', None)
         bg_loaded      = ckpt.get('binary_gripper', False)
-        model = build_model(arch_loaded, binary_gripper=bg_loaded, **ckpt['model_kwargs'])
+        mkw_eval = ckpt['model_kwargs'].copy()
+        if arch_loaded == 'split_gripper':
+            mkw_eval['action_dim'] = mkw_eval['action_dim'] - 1
+        model = build_model(arch_loaded if arch_loaded != 'split_gripper' else 'transformer',
+                            binary_gripper=bg_loaded, **mkw_eval)
         model.load_state_dict(ckpt['model_state'])
         model.eval()
         obs_mean    = ckpt['obs_mean']
