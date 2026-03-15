@@ -8,16 +8,19 @@ cd /home/noahcylich/cs188-cabinet-door-project/cabinet_door_project
 export MUJOCO_GL=osmesa PYOPENGL_PLATFORM=osmesa OMP_NUM_THREADS=2
 
 TARGET_PT="/tmp/diffusion_policy_checkpoints/preprocessed_target_states.pt"
+PRETRAIN_PT="/tmp/diffusion_policy_checkpoints/preprocessed_all_states.pt"
 CKPT_DIR="/tmp/diffusion_policy_checkpoints"
 LOG_DIR="/home/noahcylich/cs188-cabinet-door-project"
 
-# Wait for preprocess_target.py to finish
-echo "=== Waiting for preprocessed_target_states.pt ==="
-while [ ! -f "$TARGET_PT" ]; do
-    echo "  $(date): Not ready yet, sleeping 5min..."
+# Wait for both data files
+echo "=== Waiting for both preprocessed data files ==="
+while [ ! -f "$TARGET_PT" ] || [ ! -f "$PRETRAIN_PT" ]; do
+    tgt=$([ -f "$TARGET_PT" ] && echo "OK" || echo "missing")
+    pre=$([ -f "$PRETRAIN_PT" ] && echo "OK" || echo "missing")
+    echo "  $(date): target=$tgt pretrain=$pre, sleeping 5min..."
     sleep 300
 done
-echo "=== Target data ready! Starting ablations ==="
+echo "=== Both data files ready! Starting ablations ==="
 
 EVAL_FLAGS="--arch unet --feat_subset f3 --eval_only --n_eps 50 --n_eval_workers 4 --success_threshold 0.30"
 TRAIN_FLAGS="--arch unet --feat_subset f3 --epochs 200 --patience 30 --batch_size 256 --lr 1e-3"

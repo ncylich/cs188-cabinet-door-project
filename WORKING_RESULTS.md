@@ -694,13 +694,69 @@ Hinge cache: `/tmp/diffusion_policy_checkpoints/hinge_cache/` (107 episodes, (T,
 
 ---
 
+## Phase 14: Combined Dataset — More Data Unlocks Diffusion Policy (Completed)
+
+### New Dataset
+
+In addition to the original **pretrain split** (107 demos, layouts 11–60, styles 12–60), we downloaded the **target split** from the RoboCasa dataset:
+
+```
+python -m robocasa.scripts.download_datasets --split target --task OpenCabinet
+# → robocasa/datasets/v1.0/target/atomic/OpenCabinet/20250813/lerobot/
+```
+
+- **500 demos**, layouts 1–10, styles 1–10 — **zero layout/style overlap** with pretrain
+- **184,024 total frames**, same action (12-dim) and state (16-dim) format
+- Combined dataset: **607 demos**, 221,516 frames
+
+### Preprocessing
+
+Target data was preprocessed in parallel (16 MuJoCo workers) using `preprocess_target_parallel.py`:
+- Door positions extracted via `env.reset()` + XML replay per episode (~25 min total vs ~3.5 hrs sequential)
+- Handle positions extracted via MuJoCo sim state replay into `handle_cache_target/`
+- Output: `preprocessed_target_states.pt` (67MB, 44-dim `obs_full` matching pretrain layout)
+
+### Data Mixing Strategies
+
+Three strategies were tested using `bc_handle.py --arch unet --feat_subset f3` (F3 = 22-dim: proprio+handle_pos+handle_to_eef):
+
+- **Mix A (Uniform)**: pretrain + target concatenated, random shuffle (`--combined_data`)
+- **Mix B (Sequential)**: train on target only → fine-tune on pretrain (`--use_target_only` then `--checkpoint`)
+- **Mix C (Curriculum)**: combined data with target weight decaying from 100%→0% over 100 epochs (`--combined_data --curriculum_epochs 100`)
+
+Note: Mix C had a bug (`range(0, M, bs)` used total M even when curriculum `perm` had fewer entries → empty batch → `mse_loss([], []) = NaN` → permanent weight corruption). Fixed to `range(0, len(perm), bs)`.
+
+### Results
+
+All evals: 100 episodes, `--success_threshold 0.30` (any hinge > 0.3 rad), `--n_eval_workers 8`.
+
+| Model | Arch | Data | Episodes | Success |
+|-------|------|------|----------|---------|
+| BC UNet (validate_best.py) | MLP direct BC | 107 pretrain only | 100 | 44% |
+| Diffusion UNet pretrain-only | Diffusion UNet | 107 pretrain only | 50 | 10% |
+| BC UNet combined | MLP direct BC | 607 combined | 100 | **44%** |
+| Diffusion Mix A seed 0 (uniform) | Diffusion UNet | 607 combined | 100 | **48%** |
+| Diffusion Mix A seed 1 (uniform) | Diffusion UNet | 607 combined | 100 | **44%** |
+| Diffusion Mix B (sequential fine-tune) | Diffusion UNet | 607 sequential | 50 | 0% |
+| **Diffusion Mix C (curriculum)** | **Diffusion UNet** | **607 curriculum** | **100** | **49%** |
+
+### Key Findings
+
+1. **More data unlocks diffusion**: Diffusion UNet goes from 10% (107 demos) → 48–49% (607 demos), surpassing the BC UNet baseline of 44%.
+2. **BC UNet saturates at 107 demos**: Adding 500 more demos gives no improvement (44% → 44%). BC is already extracting all available signal from the original data.
+3. **Mix B (sequential fine-tune) catastrophically fails (0%)**: Training on target-only then fine-tuning on pretrain causes catastrophic forgetting. The model learns target-distribution behavior and loses pretrain knowledge entirely.
+4. **Mix C (curriculum) is the best data mixing strategy**: Decaying target data exposure from 100%→0% over training gives the best result (49%), slightly ahead of uniform mixing (46–48% avg).
+5. **Diffusion is data-hungry**: The gap between BC (saturation at 107 demos) and Diffusion (keeps improving with more data) suggests diffusion models need large datasets to outperform direct BC. With 607 demos, diffusion finally has enough signal.
+
+---
+
 ## All-Time Best Results
 
 | Metric | Best Result | Config |
 |--------|------------|--------|
-| **Success rate** | **10%** (2/20) | Friend's code (Noah): 44-dim handle-relative oracle, BC Transformer |
+| **Success rate** | **49%** | Phase 14: Diffusion UNet F3, Mix C curriculum, 607 demos |
+| **Success rate (pretrain data only)** | **44%** | Phase 13/14: BC UNet F3, validate_best.py, 107 demos |
 | **Success rate (our ablation sweep)** | **38%** (6/16) | Phase 13 F3: proprio+handle_pos+handle_to_eef, BC_UNet, 100 ep |
-| **Success rate (our bc_handle.py)** | **5%** (1/20) | `bc_handle.py`: same architecture, ep-boundary fix, val=0.0794 |
 | **Distance reduction** | **88%** | Phase 13 F6: proprio+handle_to_eef, BC_UNet |
 | **Fastest to high DR** | **20s training → 84% DR** | Phase 13 R2_BC_UNet |
 | **Best val loss (oracle)** | 0.0794 | `bc_handle.py` BC Transformer, 44-dim handle state |

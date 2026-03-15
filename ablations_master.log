@@ -1,19 +1,749 @@
-=== Waiting for preprocessed_target_states.pt ===
-  Sat Mar 14 20:58:17 UTC 2026: Not ready yet, sleeping 5min...
-  Sat Mar 14 21:03:17 UTC 2026: Not ready yet, sleeping 5min...
-  Sat Mar 14 21:08:17 UTC 2026: Not ready yet, sleeping 5min...
-  Sat Mar 14 21:13:17 UTC 2026: Not ready yet, sleeping 5min...
-  Sat Mar 14 21:18:17 UTC 2026: Not ready yet, sleeping 5min...
-  Sat Mar 14 21:23:17 UTC 2026: Not ready yet, sleeping 5min...
-  Sat Mar 14 21:28:17 UTC 2026: Not ready yet, sleeping 5min...
-  Sat Mar 14 21:33:17 UTC 2026: Not ready yet, sleeping 5min...
-  Sat Mar 14 21:38:17 UTC 2026: Not ready yet, sleeping 5min...
-  Sat Mar 14 21:43:17 UTC 2026: Not ready yet, sleeping 5min...
-  Sat Mar 14 21:48:17 UTC 2026: Not ready yet, sleeping 5min...
-  Sat Mar 14 21:53:17 UTC 2026: Not ready yet, sleeping 5min...
-  Sat Mar 14 21:58:17 UTC 2026: Not ready yet, sleeping 5min...
-  Sat Mar 14 22:03:17 UTC 2026: Not ready yet, sleeping 5min...
-  Sat Mar 14 22:08:17 UTC 2026: Not ready yet, sleeping 5min...
-  Sat Mar 14 22:13:17 UTC 2026: Not ready yet, sleeping 5min...
-  Sat Mar 14 22:18:17 UTC 2026: Not ready yet, sleeping 5min...
-  Sat Mar 14 22:23:17 UTC 2026: Not ready yet, sleeping 5min...
+=== Waiting for both preprocessed data files ===
+  Sun Mar 15 00:55:45 UTC 2026: target=missing pretrain=missing, sleeping 5min...
+  Sun Mar 15 01:00:45 UTC 2026: target=missing pretrain=missing, sleeping 5min...
+  Sun Mar 15 01:05:45 UTC 2026: target=missing pretrain=missing, sleeping 5min...
+  Sun Mar 15 01:10:45 UTC 2026: target=missing pretrain=missing, sleeping 5min...
+  Sun Mar 15 01:15:45 UTC 2026: target=missing pretrain=missing, sleeping 5min...
+  Sun Mar 15 01:20:45 UTC 2026: target=OK pretrain=missing, sleeping 5min...
+  Sun Mar 15 01:25:45 UTC 2026: target=OK pretrain=missing, sleeping 5min...
+  Sun Mar 15 01:30:45 UTC 2026: target=OK pretrain=missing, sleeping 5min...
+  Sun Mar 15 01:35:45 UTC 2026: target=OK pretrain=missing, sleeping 5min...
+=== Both data files ready! Starting ablations ===
+
+=== MIX A: Uniform combined data ===
+=== Loading data ===
+Building handle cache: 0/107 cached, running 4 workers in parallel...
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly (e.g. pip install mink==0.0.5), otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly (e.g. pip install mink==0.0.5), otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly (e.g. pip install mink==0.0.5), otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly (e.g. pip install mink==0.0.5), otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+[robosuite INFO] Loading controller configuration from: /home/noahcylich/cs188-cabinet-door-project/robosuite/robosuite/controllers/config/robots/default_pandaomron.json (composite_controller_factory.py:121)
+[robosuite INFO] Loading controller configuration from: /home/noahcylich/cs188-cabinet-door-project/robosuite/robosuite/controllers/config/robots/default_pandaomron.json (composite_controller_factory.py:121)
+[robosuite INFO] Loading controller configuration from: /home/noahcylich/cs188-cabinet-door-project/robosuite/robosuite/controllers/config/robots/default_pandaomron.json (composite_controller_factory.py:121)
+[robosuite INFO] Loading controller configuration from: /home/noahcylich/cs188-cabinet-door-project/robosuite/robosuite/controllers/config/robots/default_pandaomron.json (composite_controller_factory.py:121)
+WARNING: mimicgen environments not imported since mimicgen is not installed!
+WARNING: mimicgen environments not imported since mimicgen is not installed!
+WARNING: mimicgen environments not imported since mimicgen is not installed!
+WARNING: mimicgen environments not imported since mimicgen is not installed!
+  Done. 107 episodes processed.
+Combined data: pretrain+target = 221,516 frames, 607 episodes (107 pretrain)
+State 22-dim  Actions 12-dim  Frames 221,516  feat_subset=f3  arch=unet
+Train 197,586  Val 23,930
+
+=== Training ===
+Building U-Net windowed tensors...
+  train=188,850  val=22,954
+  Epoch    1/200  train=0.19790  val=0.09049  lr=1.00e-03
+  Epoch    2/200  train=0.08692  val=0.06570  lr=1.00e-03
+  Epoch    3/200  train=0.17769  val=0.06882  lr=9.99e-04
+  Epoch    4/200  train=0.06665  val=0.05924  lr=9.99e-04
+  Epoch    5/200  train=0.08807  val=0.09254  lr=9.98e-04
+  Epoch    6/200  train=0.08010  val=0.05594  lr=9.98e-04
+  Epoch    7/200  train=0.05472  val=0.05414  lr=9.97e-04
+  Epoch    8/200  train=0.05443  val=0.05286  lr=9.96e-04
+  Epoch    9/200  train=0.05272  val=0.05270  lr=9.95e-04
+  Epoch   10/200  train=0.05136  val=0.05145  lr=9.94e-04
+  Epoch   11/200  train=0.05210  val=0.05519  lr=9.93e-04
+  Epoch   12/200  train=0.05106  val=0.05105  lr=9.91e-04
+  Epoch   13/200  train=0.04992  val=0.05027  lr=9.90e-04
+  Epoch   14/200  train=2843287.78590  val=0.05424  lr=9.88e-04
+  Epoch   15/200  train=0.07779  val=0.05049  lr=9.86e-04
+  Epoch   16/200  train=0.04886  val=0.04927  lr=9.84e-04
+  Epoch   17/200  train=0.04789  val=0.04814  lr=9.82e-04
+  Epoch   18/200  train=0.04839  val=0.04869  lr=9.80e-04
+  Epoch   19/200  train=516.93294  val=3614.53442  lr=9.78e-04
+  Epoch   20/200  train=63.53304  val=0.04833  lr=9.76e-04
+  Epoch   21/200  train=0.04686  val=0.04801  lr=9.73e-04
+  Epoch   22/200  train=0.04627  val=0.04669  lr=9.70e-04
+  Epoch   23/200  train=4.47224  val=0.05088  lr=9.68e-04
+  Epoch   24/200  train=0.06823  val=0.04835  lr=9.65e-04
+  Epoch   25/200  train=0.04561  val=0.04638  lr=9.62e-04
+  Epoch   26/200  train=0.04547  val=0.04735  lr=9.59e-04
+  Epoch   27/200  train=0.04540  val=0.04707  lr=9.56e-04
+  Epoch   28/200  train=50.60318  val=0.05428  lr=9.52e-04
+  Epoch   29/200  train=0.07325  val=0.05107  lr=9.49e-04
+  Epoch   30/200  train=0.05460  val=0.04836  lr=9.46e-04
+  Epoch   31/200  train=0.11526  val=0.05561  lr=9.42e-04
+  Epoch   32/200  train=0.07700  val=0.04614  lr=9.38e-04
+  Epoch   33/200  train=0.04439  val=0.04662  lr=9.34e-04
+  Epoch   34/200  train=0.04511  val=0.04723  lr=9.30e-04
+  Epoch   35/200  train=0.04446  val=0.04584  lr=9.26e-04
+  Epoch   36/200  train=0.04395  val=0.04637  lr=9.22e-04
+  Epoch   37/200  train=0.04386  val=0.04658  lr=9.18e-04
+  Epoch   38/200  train=0.04415  val=0.04676  lr=9.14e-04
+  Epoch   39/200  train=4016.44488  val=0.04634  lr=9.09e-04
+  Epoch   40/200  train=0.05099  val=0.04561  lr=9.05e-04
+  Epoch   41/200  train=0.04287  val=0.04535  lr=9.00e-04
+  Epoch   42/200  train=0.04285  val=0.04620  lr=8.95e-04
+  Epoch   43/200  train=0.04272  val=0.04526  lr=8.90e-04
+  Epoch   44/200  train=20.31679  val=3.98283  lr=8.85e-04
+  Epoch   45/200  train=0.10153  val=0.04518  lr=8.80e-04
+  Epoch   46/200  train=0.05807  val=0.04475  lr=8.75e-04
+  Epoch   47/200  train=0.04201  val=0.04593  lr=8.70e-04
+  Epoch   48/200  train=0.04204  val=0.04506  lr=8.64e-04
+  Epoch   49/200  train=1.83696  val=0.06685  lr=8.59e-04
+  Epoch   50/200  train=0.05096  val=0.04610  lr=8.54e-04
+  Epoch   51/200  train=0.08580  val=0.04542  lr=8.48e-04
+  Epoch   52/200  train=0.05500  val=0.04545  lr=8.42e-04
+  Epoch   53/200  train=0.06123  val=0.04827  lr=8.37e-04
+  Epoch   54/200  train=0.05723  val=0.04518  lr=8.31e-04
+  Epoch   55/200  train=0.05057  val=0.04504  lr=8.25e-04
+  Epoch   56/200  train=0.04091  val=0.04532  lr=8.19e-04
+  Epoch   57/200  train=0.04154  val=0.04539  lr=8.13e-04
+  Epoch   58/200  train=2.42590  val=0.05069  lr=8.06e-04
+  Epoch   59/200  train=0.04650  val=0.04543  lr=8.00e-04
+  Epoch   60/200  train=0.04107  val=0.04486  lr=7.94e-04
+  Epoch   61/200  train=0.04060  val=0.04513  lr=7.88e-04
+  Epoch   62/200  train=0.04069  val=0.04549  lr=7.81e-04
+  Epoch   63/200  train=0.04102  val=0.04615  lr=7.75e-04
+  Epoch   64/200  train=0.04126  val=0.04529  lr=7.68e-04
+  Epoch   65/200  train=80.40725  val=0.04974  lr=7.61e-04
+  Epoch   66/200  train=0.04599  val=0.04843  lr=7.55e-04
+  Epoch   67/200  train=0.04654  val=0.04566  lr=7.48e-04
+  Epoch   68/200  train=0.04253  val=0.04566  lr=7.41e-04
+  Epoch   69/200  train=0.03952  val=0.04488  lr=7.34e-04
+  Epoch   70/200  train=0.03981  val=0.04570  lr=7.27e-04
+  Epoch   71/200  train=0.04017  val=0.04530  lr=7.20e-04
+  Epoch   72/200  train=0.04018  val=0.04770  lr=7.13e-04
+  Epoch   73/200  train=2.21432  val=0.04620  lr=7.06e-04
+  Epoch   74/200  train=0.04188  val=0.04577  lr=6.99e-04
+  Epoch   75/200  train=0.03892  val=0.04571  lr=6.91e-04
+  Epoch   76/200  train=0.03900  val=0.04517  lr=6.84e-04
+
+Early stopping (epoch 76, best val=0.04475)
+Best val loss: 0.04475
+Checkpoint saved → /tmp/diffusion_policy_checkpoints/mix_a_f3_unet.pt
+
+=== Evaluating (20 episodes, 500 steps) ===
+  Launching 4 eval workers for 20 episodes...
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly (e.g. pip install mink==0.0.5), otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly (e.g. pip install mink==0.0.5), otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly (e.g. pip install mink==0.0.5), otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly (e.g. pip install mink==0.0.5), otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+[robosuite INFO] Loading controller configuration from: /home/noahcylich/cs188-cabinet-door-project/robosuite/robosuite/controllers/config/robots/default_pandaomron.json (composite_controller_factory.py:121)
+[robosuite INFO] Loading controller configuration from: /home/noahcylich/cs188-cabinet-door-project/robosuite/robosuite/controllers/config/robots/default_pandaomron.json (composite_controller_factory.py:121)
+[robosuite INFO] Loading controller configuration from: /home/noahcylich/cs188-cabinet-door-project/robosuite/robosuite/controllers/config/robots/default_pandaomron.json (composite_controller_factory.py:121)
+[robosuite INFO] Loading controller configuration from: /home/noahcylich/cs188-cabinet-door-project/robosuite/robosuite/controllers/config/robots/default_pandaomron.json (composite_controller_factory.py:121)
+WARNING: mimicgen environments not imported since mimicgen is not installed!
+WARNING: mimicgen environments not imported since mimicgen is not installed!
+WARNING: mimicgen environments not imported since mimicgen is not installed!
+WARNING: mimicgen environments not imported since mimicgen is not installed!
+  Ep  1/20: X   steps=500  handle_dist=0.199m
+  Ep  2/20: X   steps=500  handle_dist=0.315m
+  Ep  3/20: X   steps=500  handle_dist=0.018m
+  Ep  4/20: OK  steps=458  handle_dist=0.175m
+  Ep  5/20: X   steps=500  handle_dist=0.447m
+  Ep  6/20: X   steps=500  handle_dist=0.479m
+  Ep  7/20: OK  steps=383  handle_dist=0.752m
+  Ep  8/20: X   steps=500  handle_dist=0.096m
+  Ep  9/20: X   steps=500  handle_dist=0.367m
+  Ep 10/20: X   steps=500  handle_dist=0.194m
+  Ep 11/20: X   steps=500  handle_dist=0.082m
+  Ep 12/20: X   steps=500  handle_dist=0.137m
+  Ep 13/20: X   steps=500  handle_dist=0.434m
+  Ep 14/20: X   steps=500  handle_dist=0.222m
+  Ep 15/20: X   steps=500  handle_dist=0.328m
+  Ep 16/20: OK  steps=206  handle_dist=0.014m
+  Ep 17/20: X   steps=500  handle_dist=0.248m
+  Ep 18/20: X   steps=500  handle_dist=0.196m
+  Ep 19/20: X   steps=500  handle_dist=0.380m
+  Ep 20/20: X   steps=500  handle_dist=0.391m
+
+Result: 3/20 (15.0%)  avg_steps=477.4
+--- Evaluating Mix A ---
+Loaded checkpoint from /tmp/diffusion_policy_checkpoints/mix_a_f3_unet.pt  arch=unet  feat_indices=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 38, 39, 40, 41, 42, 43]
+
+=== Evaluating (50 episodes, 500 steps) ===
+  Launching 4 eval workers for 50 episodes...
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly (e.g. pip install mink==0.0.5), otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly (e.g. pip install mink==0.0.5), otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly (e.g. pip install mink==0.0.5), otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly (e.g. pip install mink==0.0.5), otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+[robosuite INFO] Loading controller configuration from: /home/noahcylich/cs188-cabinet-door-project/robosuite/robosuite/controllers/config/robots/default_pandaomron.json (composite_controller_factory.py:121)
+[robosuite INFO] Loading controller configuration from: /home/noahcylich/cs188-cabinet-door-project/robosuite/robosuite/controllers/config/robots/default_pandaomron.json (composite_controller_factory.py:121)
+[robosuite INFO] Loading controller configuration from: /home/noahcylich/cs188-cabinet-door-project/robosuite/robosuite/controllers/config/robots/default_pandaomron.json (composite_controller_factory.py:121)
+[robosuite INFO] Loading controller configuration from: /home/noahcylich/cs188-cabinet-door-project/robosuite/robosuite/controllers/config/robots/default_pandaomron.json (composite_controller_factory.py:121)
+WARNING: mimicgen environments not imported since mimicgen is not installed!
+WARNING: mimicgen environments not imported since mimicgen is not installed!
+WARNING: mimicgen environments not imported since mimicgen is not installed!
+WARNING: mimicgen environments not imported since mimicgen is not installed!
+  Ep  1/50: OK  steps=113  handle_dist=0.055m
+  Ep  2/50: X   steps=500  handle_dist=0.189m
+  Ep  3/50: X   steps=500  handle_dist=0.243m
+  Ep  4/50: OK  steps=145  handle_dist=0.028m
+  Ep  5/50: OK  steps=308  handle_dist=0.009m
+  Ep  6/50: OK  steps=494  handle_dist=0.041m
+  Ep  7/50: OK  steps=254  handle_dist=0.067m
+  Ep  8/50: X   steps=500  handle_dist=0.299m
+  Ep  9/50: X   steps=500  handle_dist=0.061m
+  Ep 10/50: X   steps=500  handle_dist=0.223m
+  Ep 11/50: OK  steps=475  handle_dist=0.025m
+  Ep 12/50: X   steps=500  handle_dist=0.154m
+  Ep 13/50: OK  steps=131  handle_dist=0.042m
+  Ep 14/50: X   steps=500  handle_dist=0.230m
+  Ep 15/50: OK  steps=128  handle_dist=0.014m
+  Ep 16/50: X   steps=500  handle_dist=0.108m
+  Ep 17/50: OK  steps=125  handle_dist=0.038m
+  Ep 18/50: X   steps=500  handle_dist=0.081m
+  Ep 19/50: OK  steps=264  handle_dist=0.042m
+  Ep 20/50: OK  steps=161  handle_dist=0.079m
+  Ep 21/50: OK  steps=144  handle_dist=0.053m
+  Ep 22/50: X   steps=500  handle_dist=0.241m
+  Ep 23/50: OK  steps=109  handle_dist=0.024m
+  Ep 24/50: OK  steps=134  handle_dist=0.043m
+  Ep 25/50: X   steps=500  handle_dist=0.381m
+  Ep 26/50: X   steps=500  handle_dist=0.311m
+  Ep 27/50: OK  steps=122  handle_dist=0.042m
+  Ep 28/50: OK  steps=155  handle_dist=0.046m
+  Ep 29/50: X   steps=500  handle_dist=0.446m
+  Ep 30/50: X   steps=500  handle_dist=0.350m
+  Ep 31/50: OK  steps=128  handle_dist=0.034m
+  Ep 32/50: X   steps=500  handle_dist=0.042m
+  Ep 33/50: OK  steps=187  handle_dist=0.032m
+  Ep 34/50: X   steps=500  handle_dist=0.301m
+  Ep 35/50: X   steps=500  handle_dist=0.248m
+  Ep 36/50: X   steps=500  handle_dist=0.034m
+  Ep 37/50: X   steps=500  handle_dist=0.281m
+  Ep 38/50: X   steps=500  handle_dist=0.317m
+  Ep 39/50: OK  steps=128  handle_dist=0.027m
+  Ep 40/50: X   steps=500  handle_dist=0.081m
+  Ep 41/50: OK  steps=137  handle_dist=0.032m
+  Ep 42/50: X   steps=500  handle_dist=0.257m
+  Ep 43/50: X   steps=500  handle_dist=0.365m
+  Ep 44/50: X   steps=500  handle_dist=0.098m
+  Ep 45/50: OK  steps=188  handle_dist=0.046m
+  Ep 46/50: X   steps=500  handle_dist=0.262m
+  Ep 47/50: OK  steps=118  handle_dist=0.040m
+  Ep 48/50: OK  steps=174  handle_dist=0.029m
+  Ep 49/50: OK  steps=113  handle_dist=0.046m
+  Ep 50/50: X   steps=500  handle_dist=0.305m
+
+Result: 24/50 (48.0%)  avg_steps=348.7
+
+=== MIX B Phase 1: Target-only pretraining ===
+=== Loading data ===
+Target-only data: 184,024 frames, 500 episodes
+State 22-dim  Actions 12-dim  Frames 184,024  feat_subset=f3  arch=unet
+Train 165,110  Val 18,914
+
+=== Training ===
+Building U-Net windowed tensors...
+  train=157,910  val=18,114
+  Epoch    1/200  train=0.28052  val=0.05992  lr=1.00e-03
+  Epoch    2/200  train=0.05785  val=0.05492  lr=1.00e-03
+  Epoch    3/200  train=0.05387  val=0.05407  lr=9.99e-04
+  Epoch    4/200  train=0.05229  val=0.05181  lr=9.99e-04
+  Epoch    5/200  train=0.05127  val=0.05013  lr=9.98e-04
+  Epoch    6/200  train=0.05030  val=0.05031  lr=9.98e-04
+  Epoch    7/200  train=0.04964  val=0.04934  lr=9.97e-04
+  Epoch    8/200  train=0.04928  val=0.04887  lr=9.96e-04
+  Epoch    9/200  train=0.04888  val=0.04892  lr=9.95e-04
+  Epoch   10/200  train=0.04846  val=0.04891  lr=9.94e-04
+  Epoch   11/200  train=0.04834  val=0.04912  lr=9.93e-04
+  Epoch   12/200  train=0.04743  val=0.04766  lr=9.91e-04
+  Epoch   13/200  train=0.04726  val=0.04802  lr=9.90e-04
+  Epoch   14/200  train=0.04735  val=0.04828  lr=9.88e-04
+  Epoch   15/200  train=0.04658  val=0.04710  lr=9.86e-04
+  Epoch   16/200  train=0.04630  val=0.04650  lr=9.84e-04
+  Epoch   17/200  train=0.04596  val=0.04724  lr=9.82e-04
+  Epoch   18/200  train=0.04632  val=0.04636  lr=9.80e-04
+  Epoch   19/200  train=0.04586  val=0.04728  lr=9.78e-04
+  Epoch   20/200  train=0.04531  val=0.04741  lr=9.76e-04
+  Epoch   21/200  train=0.04482  val=0.04533  lr=9.73e-04
+  Epoch   22/200  train=0.04476  val=0.04571  lr=9.70e-04
+  Epoch   23/200  train=0.04419  val=0.04640  lr=9.68e-04
+  Epoch   24/200  train=0.04443  val=0.04563  lr=9.65e-04
+  Epoch   25/200  train=0.04406  val=0.04573  lr=9.62e-04
+  Epoch   26/200  train=0.04394  val=0.04604  lr=9.59e-04
+  Epoch   27/200  train=0.04372  val=0.04553  lr=9.56e-04
+  Epoch   28/200  train=0.04359  val=0.04721  lr=9.52e-04
+  Epoch   29/200  train=0.04328  val=0.04564  lr=9.49e-04
+  Epoch   30/200  train=0.04342  val=0.04541  lr=9.46e-04
+  Epoch   31/200  train=0.04306  val=0.04566  lr=9.42e-04
+  Epoch   32/200  train=0.04303  val=0.04589  lr=9.38e-04
+  Epoch   33/200  train=0.04262  val=0.04568  lr=9.34e-04
+  Epoch   34/200  train=0.04221  val=0.04593  lr=9.30e-04
+  Epoch   35/200  train=0.04237  val=0.04580  lr=9.26e-04
+  Epoch   36/200  train=0.04222  val=0.04568  lr=9.22e-04
+  Epoch   37/200  train=0.04217  val=0.04535  lr=9.18e-04
+  Epoch   38/200  train=0.04170  val=0.04616  lr=9.14e-04
+  Epoch   39/200  train=0.04160  val=0.04665  lr=9.09e-04
+  Epoch   40/200  train=0.04139  val=0.04686  lr=9.05e-04
+  Epoch   41/200  train=0.04116  val=0.04629  lr=9.00e-04
+  Epoch   42/200  train=0.04137  val=0.04561  lr=8.95e-04
+  Epoch   43/200  train=0.04088  val=0.04578  lr=8.90e-04
+  Epoch   44/200  train=0.04120  val=0.04652  lr=8.85e-04
+  Epoch   45/200  train=0.04039  val=0.04605  lr=8.80e-04
+  Epoch   46/200  train=0.04031  val=0.04670  lr=8.75e-04
+  Epoch   47/200  train=0.04023  val=0.04668  lr=8.70e-04
+  Epoch   48/200  train=0.04016  val=0.04770  lr=8.64e-04
+  Epoch   49/200  train=0.03982  val=0.04743  lr=8.59e-04
+  Epoch   50/200  train=0.03936  val=0.04682  lr=8.54e-04
+  Epoch   51/200  train=0.03960  val=0.04758  lr=8.48e-04
+
+Early stopping (epoch 51, best val=0.04533)
+Best val loss: 0.04533
+Checkpoint saved → /tmp/diffusion_policy_checkpoints/mix_b_phase1.pt
+
+=== Evaluating (20 episodes, 500 steps) ===
+  Launching 4 eval workers for 20 episodes...
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly (e.g. pip install mink==0.0.5), otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly (e.g. pip install mink==0.0.5), otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly (e.g. pip install mink==0.0.5), otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly (e.g. pip install mink==0.0.5), otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+[robosuite INFO] Loading controller configuration from: /home/noahcylich/cs188-cabinet-door-project/robosuite/robosuite/controllers/config/robots/default_pandaomron.json (composite_controller_factory.py:121)
+[robosuite INFO] Loading controller configuration from: /home/noahcylich/cs188-cabinet-door-project/robosuite/robosuite/controllers/config/robots/default_pandaomron.json (composite_controller_factory.py:121)
+[robosuite INFO] Loading controller configuration from: /home/noahcylich/cs188-cabinet-door-project/robosuite/robosuite/controllers/config/robots/default_pandaomron.json (composite_controller_factory.py:121)
+[robosuite INFO] Loading controller configuration from: /home/noahcylich/cs188-cabinet-door-project/robosuite/robosuite/controllers/config/robots/default_pandaomron.json (composite_controller_factory.py:121)
+WARNING: mimicgen environments not imported since mimicgen is not installed!
+WARNING: mimicgen environments not imported since mimicgen is not installed!
+WARNING: mimicgen environments not imported since mimicgen is not installed!
+WARNING: mimicgen environments not imported since mimicgen is not installed!
+  Ep  1/20: X   steps=500  handle_dist=0.314m
+  Ep  2/20: X   steps=500  handle_dist=0.282m
+  Ep  3/20: X   steps=500  handle_dist=0.389m
+  Ep  4/20: X   steps=500  handle_dist=0.450m
+  Ep  5/20: X   steps=500  handle_dist=0.170m
+  Ep  6/20: X   steps=500  handle_dist=0.257m
+  Ep  7/20: X   steps=500  handle_dist=0.304m
+  Ep  8/20: X   steps=500  handle_dist=0.470m
+  Ep  9/20: X   steps=500  handle_dist=0.414m
+  Ep 10/20: X   steps=500  handle_dist=0.286m
+  Ep 11/20: X   steps=500  handle_dist=0.241m
+  Ep 12/20: X   steps=500  handle_dist=0.173m
+  Ep 13/20: X   steps=500  handle_dist=0.349m
+  Ep 14/20: X   steps=500  handle_dist=0.266m
+  Ep 15/20: X   steps=500  handle_dist=0.235m
+  Ep 16/20: X   steps=500  handle_dist=0.396m
+  Ep 17/20: X   steps=500  handle_dist=0.322m
+  Ep 18/20: X   steps=500  handle_dist=0.598m
+  Ep 19/20: X   steps=500  handle_dist=0.412m
+  Ep 20/20: X   steps=500  handle_dist=0.283m
+
+Result: 0/20 (0.0%)  avg_steps=500.0
+
+=== MIX B Phase 2: Fine-tune on pretrain ===
+=== Loading data ===
+Handle cache complete (107/107 episodes cached).
+State 22-dim  Actions 12-dim  Frames 37,492  feat_subset=f3  arch=unet
+Train 33,663  Val 3,829
+
+=== Training ===
+Building U-Net windowed tensors...
+  train=32,127  val=3,653
+  Epoch    1/100  train=0.14959  val=0.08283  lr=3.00e-04
+  Epoch    2/100  train=0.07379  val=0.06691  lr=3.00e-04
+  Epoch    3/100  train=0.06451  val=0.06309  lr=2.99e-04
+  Epoch    4/100  train=0.06099  val=0.06235  lr=2.99e-04
+  Epoch    5/100  train=0.05784  val=0.05759  lr=2.98e-04
+  Epoch    6/100  train=0.05659  val=0.05737  lr=2.97e-04
+  Epoch    7/100  train=0.05472  val=0.05902  lr=2.96e-04
+  Epoch    8/100  train=0.05356  val=0.05678  lr=2.95e-04
+  Epoch    9/100  train=0.05303  val=0.05545  lr=2.94e-04
+  Epoch   10/100  train=0.05063  val=0.05178  lr=2.93e-04
+  Epoch   11/100  train=0.05014  val=0.05449  lr=2.91e-04
+  Epoch   12/100  train=0.04959  val=0.05209  lr=2.89e-04
+  Epoch   13/100  train=0.04772  val=0.05255  lr=2.88e-04
+  Epoch   14/100  train=0.04756  val=0.05360  lr=2.86e-04
+  Epoch   15/100  train=0.04747  val=0.05528  lr=2.84e-04
+  Epoch   16/100  train=0.04676  val=0.05312  lr=2.81e-04
+  Epoch   17/100  train=0.04595  val=0.05521  lr=2.79e-04
+  Epoch   18/100  train=0.04611  val=0.05517  lr=2.77e-04
+  Epoch   19/100  train=0.04411  val=0.05434  lr=2.74e-04
+  Epoch   20/100  train=0.04443  val=0.05689  lr=2.71e-04
+  Epoch   21/100  train=0.04359  val=0.05623  lr=2.69e-04
+  Epoch   22/100  train=0.04356  val=0.05486  lr=2.66e-04
+  Epoch   23/100  train=0.04158  val=0.05622  lr=2.63e-04
+  Epoch   24/100  train=0.04209  val=0.05715  lr=2.59e-04
+  Epoch   25/100  train=0.04201  val=0.05626  lr=2.56e-04
+  Epoch   26/100  train=0.04133  val=0.05689  lr=2.53e-04
+  Epoch   27/100  train=0.03980  val=0.05763  lr=2.49e-04
+  Epoch   28/100  train=0.04122  val=0.05767  lr=2.46e-04
+  Epoch   29/100  train=0.03925  val=0.05968  lr=2.42e-04
+  Epoch   30/100  train=0.03957  val=0.06253  lr=2.38e-04
+
+Early stopping (epoch 30, best val=0.05178)
+Best val loss: 0.05178
+Checkpoint saved → /tmp/diffusion_policy_checkpoints/mix_b_final.pt
+
+=== Evaluating (20 episodes, 500 steps) ===
+  Launching 4 eval workers for 20 episodes...
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly (e.g. pip install mink==0.0.5), otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly (e.g. pip install mink==0.0.5), otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly (e.g. pip install mink==0.0.5), otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly (e.g. pip install mink==0.0.5), otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+[robosuite INFO] Loading controller configuration from: /home/noahcylich/cs188-cabinet-door-project/robosuite/robosuite/controllers/config/robots/default_pandaomron.json (composite_controller_factory.py:121)
+[robosuite INFO] Loading controller configuration from: /home/noahcylich/cs188-cabinet-door-project/robosuite/robosuite/controllers/config/robots/default_pandaomron.json (composite_controller_factory.py:121)
+[robosuite INFO] Loading controller configuration from: /home/noahcylich/cs188-cabinet-door-project/robosuite/robosuite/controllers/config/robots/default_pandaomron.json (composite_controller_factory.py:121)
+[robosuite INFO] Loading controller configuration from: /home/noahcylich/cs188-cabinet-door-project/robosuite/robosuite/controllers/config/robots/default_pandaomron.json (composite_controller_factory.py:121)
+WARNING: mimicgen environments not imported since mimicgen is not installed!
+WARNING: mimicgen environments not imported since mimicgen is not installed!
+WARNING: mimicgen environments not imported since mimicgen is not installed!
+WARNING: mimicgen environments not imported since mimicgen is not installed!
+  Ep  1/20: X   steps=500  handle_dist=0.324m
+  Ep  2/20: X   steps=500  handle_dist=0.966m
+  Ep  3/20: X   steps=500  handle_dist=0.955m
+  Ep  4/20: X   steps=500  handle_dist=0.446m
+  Ep  5/20: X   steps=500  handle_dist=0.759m
+  Ep  6/20: X   steps=500  handle_dist=0.411m
+  Ep  7/20: X   steps=500  handle_dist=0.383m
+  Ep  8/20: X   steps=500  handle_dist=0.273m
+  Ep  9/20: X   steps=500  handle_dist=0.299m
+  Ep 10/20: X   steps=500  handle_dist=0.283m
+  Ep 11/20: X   steps=500  handle_dist=1.208m
+  Ep 12/20: X   steps=500  handle_dist=0.652m
+  Ep 13/20: X   steps=500  handle_dist=0.517m
+  Ep 14/20: X   steps=500  handle_dist=0.622m
+  Ep 15/20: X   steps=500  handle_dist=0.569m
+  Ep 16/20: X   steps=500  handle_dist=0.418m
+  Ep 17/20: X   steps=500  handle_dist=0.390m
+  Ep 18/20: X   steps=500  handle_dist=0.450m
+  Ep 19/20: X   steps=500  handle_dist=1.200m
+  Ep 20/20: X   steps=500  handle_dist=0.188m
+
+Result: 0/20 (0.0%)  avg_steps=500.0
+--- Evaluating Mix B ---
+Loaded checkpoint from /tmp/diffusion_policy_checkpoints/mix_b_final.pt  arch=unet  feat_indices=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 38, 39, 40, 41, 42, 43]
+
+=== Evaluating (50 episodes, 500 steps) ===
+  Launching 4 eval workers for 50 episodes...
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly (e.g. pip install mink==0.0.5), otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly (e.g. pip install mink==0.0.5), otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly (e.g. pip install mink==0.0.5), otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly (e.g. pip install mink==0.0.5), otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+[robosuite INFO] Loading controller configuration from: /home/noahcylich/cs188-cabinet-door-project/robosuite/robosuite/controllers/config/robots/default_pandaomron.json (composite_controller_factory.py:121)
+[robosuite INFO] Loading controller configuration from: /home/noahcylich/cs188-cabinet-door-project/robosuite/robosuite/controllers/config/robots/default_pandaomron.json (composite_controller_factory.py:121)
+[robosuite INFO] Loading controller configuration from: /home/noahcylich/cs188-cabinet-door-project/robosuite/robosuite/controllers/config/robots/default_pandaomron.json (composite_controller_factory.py:121)
+[robosuite INFO] Loading controller configuration from: /home/noahcylich/cs188-cabinet-door-project/robosuite/robosuite/controllers/config/robots/default_pandaomron.json (composite_controller_factory.py:121)
+WARNING: mimicgen environments not imported since mimicgen is not installed!
+WARNING: mimicgen environments not imported since mimicgen is not installed!
+WARNING: mimicgen environments not imported since mimicgen is not installed!
+WARNING: mimicgen environments not imported since mimicgen is not installed!
+  Ep  1/50: X   steps=500  handle_dist=0.452m
+  Ep  2/50: X   steps=500  handle_dist=0.385m
+  Ep  3/50: X   steps=500  handle_dist=0.791m
+  Ep  4/50: X   steps=500  handle_dist=0.239m
+  Ep  5/50: X   steps=500  handle_dist=0.348m
+  Ep  6/50: X   steps=500  handle_dist=0.312m
+  Ep  7/50: X   steps=500  handle_dist=0.698m
+  Ep  8/50: X   steps=500  handle_dist=0.400m
+  Ep  9/50: X   steps=500  handle_dist=0.494m
+  Ep 10/50: X   steps=500  handle_dist=1.495m
+  Ep 11/50: X   steps=500  handle_dist=0.644m
+  Ep 12/50: X   steps=500  handle_dist=0.815m
+  Ep 13/50: X   steps=500  handle_dist=0.256m
+  Ep 14/50: X   steps=500  handle_dist=0.386m
+  Ep 15/50: X   steps=500  handle_dist=0.780m
+  Ep 16/50: X   steps=500  handle_dist=0.256m
+  Ep 17/50: X   steps=500  handle_dist=0.181m
+  Ep 18/50: X   steps=500  handle_dist=1.274m
+  Ep 19/50: X   steps=500  handle_dist=0.969m
+  Ep 20/50: X   steps=500  handle_dist=0.382m
+  Ep 21/50: X   steps=500  handle_dist=0.520m
+  Ep 22/50: X   steps=500  handle_dist=0.342m
+  Ep 23/50: X   steps=500  handle_dist=0.483m
+  Ep 24/50: X   steps=500  handle_dist=0.410m
+  Ep 25/50: X   steps=500  handle_dist=0.547m
+  Ep 26/50: X   steps=500  handle_dist=0.337m
+  Ep 27/50: X   steps=500  handle_dist=0.832m
+  Ep 28/50: X   steps=500  handle_dist=0.569m
+  Ep 29/50: X   steps=500  handle_dist=0.490m
+  Ep 30/50: X   steps=500  handle_dist=0.596m
+  Ep 31/50: X   steps=500  handle_dist=1.189m
+  Ep 32/50: X   steps=500  handle_dist=0.647m
+  Ep 33/50: X   steps=500  handle_dist=0.480m
+  Ep 34/50: X   steps=500  handle_dist=0.533m
+  Ep 35/50: X   steps=500  handle_dist=0.721m
+  Ep 36/50: X   steps=500  handle_dist=0.294m
+  Ep 37/50: X   steps=500  handle_dist=0.550m
+  Ep 38/50: X   steps=500  handle_dist=0.106m
+  Ep 39/50: X   steps=500  handle_dist=0.622m
+  Ep 40/50: X   steps=500  handle_dist=0.399m
+  Ep 41/50: X   steps=500  handle_dist=0.197m
+  Ep 42/50: X   steps=500  handle_dist=0.551m
+  Ep 43/50: X   steps=500  handle_dist=0.644m
+  Ep 44/50: X   steps=500  handle_dist=0.664m
+  Ep 45/50: X   steps=500  handle_dist=0.756m
+  Ep 46/50: X   steps=500  handle_dist=0.072m
+  Ep 47/50: X   steps=500  handle_dist=0.888m
+  Ep 48/50: X   steps=500  handle_dist=0.533m
+  Ep 49/50: X   steps=500  handle_dist=0.292m
+  Ep 50/50: X   steps=500  handle_dist=0.253m
+
+Result: 0/50 (0.0%)  avg_steps=500.0
+
+=== MIX C: Curriculum combined data ===
+=== Loading data ===
+Handle cache complete (107/107 episodes cached).
+Combined data: pretrain+target = 221,516 frames, 607 episodes (107 pretrain)
+State 22-dim  Actions 12-dim  Frames 221,516  feat_subset=f3  arch=unet
+Train 197,586  Val 23,930
+  Curriculum: ~33,742 pretrain train samples (of 197,586 total)
+
+=== Training ===
+Building U-Net windowed tensors...
+  train=188,850  val=22,954
+  Curriculum: 33,742 pretrain + 155,108 target samples, target weight decays over 100 epochs.
+  Epoch    1/200  train=0.21465  val=0.07327  lr=1.00e-03
+  Epoch    2/200  train=nan  val=0.20086  lr=1.00e-03
+  Epoch    3/200  train=nan  val=0.11279  lr=9.99e-04
+  Epoch    4/200  train=nan  val=0.10433  lr=9.99e-04
+  Epoch    5/200  train=nan  val=0.08661  lr=9.98e-04
+  Epoch    6/200  train=nan  val=0.08395  lr=9.98e-04
+  Epoch    7/200  train=nan  val=0.20045  lr=9.97e-04
+  Epoch    8/200  train=nan  val=0.08127  lr=9.96e-04
+  Epoch    9/200  train=nan  val=65.96046  lr=9.95e-04
+  Epoch   10/200  train=nan  val=0.09113  lr=9.94e-04
+  Epoch   11/200  train=nan  val=0.09166  lr=9.93e-04
+  Epoch   12/200  train=nan  val=0.11009  lr=9.91e-04
+  Epoch   13/200  train=nan  val=0.13098  lr=9.90e-04
+  Epoch   14/200  train=nan  val=0.07485  lr=9.88e-04
+  Epoch   15/200  train=nan  val=0.07622  lr=9.86e-04
+  Epoch   16/200  train=nan  val=0.07451  lr=9.84e-04
+  Epoch   17/200  train=nan  val=0.07861  lr=9.82e-04
+  Epoch   18/200  train=nan  val=0.09034  lr=9.80e-04
+  Epoch   19/200  train=nan  val=0.07767  lr=9.78e-04
+  Epoch   20/200  train=nan  val=0.09294  lr=9.76e-04
+  Epoch   21/200  train=nan  val=0.08238  lr=9.73e-04
+  Epoch   22/200  train=nan  val=0.20236  lr=9.70e-04
+  Epoch   23/200  train=nan  val=0.08944  lr=9.68e-04
+  Epoch   24/200  train=nan  val=0.08173  lr=9.65e-04
+  Epoch   25/200  train=nan  val=0.07677  lr=9.62e-04
+  Epoch   26/200  train=nan  val=0.07960  lr=9.59e-04
+  Epoch   27/200  train=nan  val=0.07652  lr=9.56e-04
+  Epoch   28/200  train=nan  val=0.10976  lr=9.52e-04
+  Epoch   29/200  train=nan  val=101.60226  lr=9.49e-04
+  Epoch   30/200  train=nan  val=2.32323  lr=9.46e-04
+  Epoch   31/200  train=nan  val=0.15121  lr=9.42e-04
+
+Early stopping (epoch 31, best val=0.07327)
+Best val loss: 0.07327
+Checkpoint saved → /tmp/diffusion_policy_checkpoints/mix_c_f3_unet.pt
+
+=== Evaluating (20 episodes, 500 steps) ===
+  Launching 4 eval workers for 20 episodes...
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly (e.g. pip install mink==0.0.5), otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly (e.g. pip install mink==0.0.5), otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly (e.g. pip install mink==0.0.5), otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly (e.g. pip install mink==0.0.5), otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+[robosuite INFO] Loading controller configuration from: /home/noahcylich/cs188-cabinet-door-project/robosuite/robosuite/controllers/config/robots/default_pandaomron.json (composite_controller_factory.py:121)
+[robosuite INFO] Loading controller configuration from: /home/noahcylich/cs188-cabinet-door-project/robosuite/robosuite/controllers/config/robots/default_pandaomron.json (composite_controller_factory.py:121)
+[robosuite INFO] Loading controller configuration from: /home/noahcylich/cs188-cabinet-door-project/robosuite/robosuite/controllers/config/robots/default_pandaomron.json (composite_controller_factory.py:121)
+[robosuite INFO] Loading controller configuration from: /home/noahcylich/cs188-cabinet-door-project/robosuite/robosuite/controllers/config/robots/default_pandaomron.json (composite_controller_factory.py:121)
+WARNING: mimicgen environments not imported since mimicgen is not installed!
+Process SpawnPoolWorker-4:
+Traceback (most recent call last):
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/pool.py", line 131, in worker
+    put((job, i, result))
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/queues.py", line 399, in put
+    self._writer.send_bytes(obj)
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/connection.py", line 200, in send_bytes
+    self._send_bytes(m[offset:offset + size])
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/connection.py", line 427, in _send_bytes
+    self._send(header + buf)
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/connection.py", line 384, in _send
+    n = write(self._handle, buf)
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+BrokenPipeError: [Errno 32] Broken pipe
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/process.py", line 314, in _bootstrap
+    self.run()
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/pool.py", line 136, in worker
+    put((job, i, (False, wrapped)))
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/queues.py", line 399, in put
+    self._writer.send_bytes(obj)
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/connection.py", line 200, in send_bytes
+    self._send_bytes(m[offset:offset + size])
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/connection.py", line 427, in _send_bytes
+    self._send(header + buf)
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/connection.py", line 384, in _send
+    n = write(self._handle, buf)
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+BrokenPipeError: [Errno 32] Broken pipe
+WARNING: mimicgen environments not imported since mimicgen is not installed!
+Process SpawnPoolWorker-3:
+Traceback (most recent call last):
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/pool.py", line 131, in worker
+    put((job, i, result))
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/queues.py", line 399, in put
+    self._writer.send_bytes(obj)
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/connection.py", line 200, in send_bytes
+    self._send_bytes(m[offset:offset + size])
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/connection.py", line 427, in _send_bytes
+    self._send(header + buf)
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/connection.py", line 384, in _send
+    n = write(self._handle, buf)
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+BrokenPipeError: [Errno 32] Broken pipe
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/process.py", line 314, in _bootstrap
+    self.run()
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/pool.py", line 136, in worker
+    put((job, i, (False, wrapped)))
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/queues.py", line 399, in put
+    self._writer.send_bytes(obj)
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/connection.py", line 200, in send_bytes
+    self._send_bytes(m[offset:offset + size])
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/connection.py", line 427, in _send_bytes
+    self._send(header + buf)
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/connection.py", line 384, in _send
+    n = write(self._handle, buf)
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+BrokenPipeError: [Errno 32] Broken pipe
+WARNING: mimicgen environments not imported since mimicgen is not installed!
+Process SpawnPoolWorker-2:
+Traceback (most recent call last):
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/pool.py", line 131, in worker
+    put((job, i, result))
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/queues.py", line 399, in put
+    self._writer.send_bytes(obj)
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/connection.py", line 200, in send_bytes
+    self._send_bytes(m[offset:offset + size])
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/connection.py", line 427, in _send_bytes
+    self._send(header + buf)
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/connection.py", line 384, in _send
+    n = write(self._handle, buf)
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+BrokenPipeError: [Errno 32] Broken pipe
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/process.py", line 314, in _bootstrap
+    self.run()
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/pool.py", line 136, in worker
+    put((job, i, (False, wrapped)))
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/queues.py", line 399, in put
+    self._writer.send_bytes(obj)
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/connection.py", line 200, in send_bytes
+    self._send_bytes(m[offset:offset + size])
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/connection.py", line 427, in _send_bytes
+    self._send(header + buf)
+  File "/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/connection.py", line 384, in _send
+    n = write(self._handle, buf)
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+BrokenPipeError: [Errno 32] Broken pipe
+WARNING: mimicgen environments not imported since mimicgen is not installed!
+/home/noahcylich/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/multiprocessing/resource_tracker.py:279: UserWarning: resource_tracker: There appear to be 6 leaked semaphore objects to clean up at shutdown
+  warnings.warn('resource_tracker: There appear to be %d '
+--- Evaluating Mix C ---
+Loaded checkpoint from /tmp/diffusion_policy_checkpoints/mix_c_f3_unet.pt  arch=unet  feat_indices=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 38, 39, 40, 41, 42, 43]
+
+=== Evaluating (50 episodes, 500 steps) ===
+  Launching 4 eval workers for 50 episodes...
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly (e.g. pip install mink==0.0.5), otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly (e.g. pip install mink==0.0.5), otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly (e.g. pip install mink==0.0.5), otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+[robosuite INFO] Loading controller configuration from: /home/noahcylich/cs188-cabinet-door-project/robosuite/robosuite/controllers/config/robots/default_pandaomron.json (composite_controller_factory.py:121)
+[robosuite INFO] Loading controller configuration from: /home/noahcylich/cs188-cabinet-door-project/robosuite/robosuite/controllers/config/robots/default_pandaomron.json (composite_controller_factory.py:121)
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly (e.g. pip install mink==0.0.5), otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+[robosuite INFO] Loading controller configuration from: /home/noahcylich/cs188-cabinet-door-project/robosuite/robosuite/controllers/config/robots/default_pandaomron.json (composite_controller_factory.py:121)
+[robosuite INFO] Loading controller configuration from: /home/noahcylich/cs188-cabinet-door-project/robosuite/robosuite/controllers/config/robots/default_pandaomron.json (composite_controller_factory.py:121)
+WARNING: mimicgen environments not imported since mimicgen is not installed!
+WARNING: mimicgen environments not imported since mimicgen is not installed!
+WARNING: mimicgen environments not imported since mimicgen is not installed!
+WARNING: mimicgen environments not imported since mimicgen is not installed!
+  Ep  1/50: X   steps=500  handle_dist=1.077m
+  Ep  2/50: X   steps=500  handle_dist=1.346m
+  Ep  3/50: X   steps=500  handle_dist=1.344m
+  Ep  4/50: X   steps=500  handle_dist=1.260m
+  Ep  5/50: X   steps=500  handle_dist=0.741m
+  Ep  6/50: X   steps=500  handle_dist=1.457m
+  Ep  7/50: X   steps=500  handle_dist=1.363m
+  Ep  8/50: X   steps=500  handle_dist=0.963m
+  Ep  9/50: X   steps=500  handle_dist=0.926m
+  Ep 10/50: X   steps=500  handle_dist=1.493m
+  Ep 11/50: X   steps=500  handle_dist=1.419m
+  Ep 12/50: X   steps=500  handle_dist=0.976m
+  Ep 13/50: X   steps=500  handle_dist=1.118m
+  Ep 14/50: X   steps=500  handle_dist=1.143m
+  Ep 15/50: X   steps=500  handle_dist=1.448m
+  Ep 16/50: X   steps=500  handle_dist=0.979m
+  Ep 17/50: X   steps=500  handle_dist=1.041m
+  Ep 18/50: X   steps=500  handle_dist=0.992m
+  Ep 19/50: X   steps=500  handle_dist=1.342m
+  Ep 20/50: X   steps=500  handle_dist=0.962m
+  Ep 21/50: X   steps=500  handle_dist=1.307m
+  Ep 22/50: X   steps=500  handle_dist=0.958m
+  Ep 23/50: X   steps=500  handle_dist=1.222m
+  Ep 24/50: X   steps=500  handle_dist=1.067m
+  Ep 25/50: X   steps=500  handle_dist=0.835m
+  Ep 26/50: X   steps=500  handle_dist=1.444m
+  Ep 27/50: X   steps=500  handle_dist=1.005m
+  Ep 28/50: X   steps=500  handle_dist=1.233m
+  Ep 29/50: X   steps=500  handle_dist=0.551m
+  Ep 30/50: X   steps=500  handle_dist=1.454m
+  Ep 31/50: X   steps=500  handle_dist=1.381m
+  Ep 32/50: X   steps=500  handle_dist=0.962m
+  Ep 33/50: X   steps=500  handle_dist=1.479m
+  Ep 34/50: X   steps=500  handle_dist=0.932m
+  Ep 35/50: X   steps=500  handle_dist=0.377m
+  Ep 36/50: X   steps=500  handle_dist=0.967m
+  Ep 37/50: X   steps=500  handle_dist=0.977m
+  Ep 38/50: X   steps=500  handle_dist=1.432m
+  Ep 39/50: X   steps=500  handle_dist=0.952m
+  Ep 40/50: X   steps=500  handle_dist=1.214m
+  Ep 41/50: X   steps=500  handle_dist=1.201m
+  Ep 42/50: X   steps=500  handle_dist=1.475m
+  Ep 43/50: X   steps=500  handle_dist=0.460m
+  Ep 44/50: X   steps=500  handle_dist=0.777m
+  Ep 45/50: X   steps=500  handle_dist=1.354m
+  Ep 46/50: X   steps=500  handle_dist=1.447m
+  Ep 47/50: X   steps=500  handle_dist=1.237m
+  Ep 48/50: X   steps=500  handle_dist=0.909m
+  Ep 49/50: X   steps=500  handle_dist=0.833m
+  Ep 50/50: X   steps=500  handle_dist=0.807m
+
+Result: 0/50 (0.0%)  avg_steps=500.0
+
+========================================
+ABLATION RESULTS SUMMARY
+========================================
+Mix A: 
+Mix B: 
+Mix C: 
+========================================

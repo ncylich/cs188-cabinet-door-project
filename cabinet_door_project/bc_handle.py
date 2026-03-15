@@ -69,6 +69,7 @@ FEATURE_CONFIGS = {
     'full':        list(range(44)),                                      # 44-dim default
     'no_handle':   list(range(38)),                                      # 38-dim: drop handle_pos + handle_to_eef
     'handle_only': list(range(16)) + list(range(23, 30)) + list(range(37, 44)),  # 30-dim: no door centroid
+    'f3':          list(range(16)) + list(range(38, 44)),                # 22-dim: proprio+handle_pos+handle_to_eef (Phase 13 winner)
 }
 
 # Action dim 11 = gripper (raw LeRobot ordering, mapped to env dim 6 at exec time)
@@ -240,7 +241,20 @@ def build_handle_cache(eef_pos_all, ep_boundaries, n_workers=4):
 # Data loading
 # ═══════════════════════════════════════════════════════════════════════════
 
-def load_data(n_workers=4, feat_indices=None, combined_data=False):
+def load_data(n_workers=4, feat_indices=None, combined_data=False, use_target_only=False):
+    n_pretrain_eps = 0
+
+    if use_target_only:
+        target_path = SAVE_DIR / 'preprocessed_target_states.pt'
+        tdata = torch.load(target_path, weights_only=False)
+        obs_full  = tdata['obs_full'].float()
+        actions   = tdata['actions'].float()
+        ep_bounds = tdata['ep_boundaries']
+        print(f'Target-only data: {len(obs_full):,} frames, {len(ep_bounds)} episodes', flush=True)
+        if feat_indices is not None and len(feat_indices) < STATE_DIM:
+            obs_full = obs_full[:, feat_indices]
+        return obs_full, actions, ep_bounds, n_pretrain_eps
+
     data     = torch.load(SAVE_DIR / 'preprocessed_all_states.pt', weights_only=False)
     feats    = data['features']
     actions  = data['actions'].float()
@@ -255,6 +269,8 @@ def load_data(n_workers=4, feat_indices=None, combined_data=False):
         dim=-1,
     ).float()
     assert obs_full.shape[-1] == STATE_DIM, f"Got {obs_full.shape[-1]}, expected {STATE_DIM}"
+
+    n_pretrain_eps = len(ep_bounds)
 
     # Optionally append target split data (500 demos) for combined training
     if combined_data:
@@ -273,7 +289,7 @@ def load_data(n_workers=4, feat_indices=None, combined_data=False):
             actions   = torch.cat([actions, tact], dim=0)
             ep_bounds = np.concatenate([ep_bounds, tep_offset], axis=0)
             print(f'Combined data: pretrain+target = {len(obs_full):,} frames, '
-                  f'{len(ep_bounds)} episodes', flush=True)
+                  f'{len(ep_bounds)} episodes ({n_pretrain_eps} pretrain)', flush=True)
         else:
             print(f'WARNING: --combined_data set but {target_path} not found. '
                   f'Run preprocess_target.py first.', flush=True)
@@ -282,7 +298,7 @@ def load_data(n_workers=4, feat_indices=None, combined_data=False):
         obs = obs_full[:, feat_indices]
     else:
         obs = obs_full
-    return obs, actions, ep_bounds
+    return obs, actions, ep_bounds, n_pretrain_eps
 
 
 def train_val_split(obs, actions, ep_bounds, val_frac=0.10, seed=0):
@@ -625,7 +641,8 @@ def train(tr_obs, tr_act, va_obs, va_act,
           lr=3e-4, weight_decay=1e-4, grad_clip=1.0,
           max_epochs=150, patience=20, batch_size=128,
           gripper_weight=2.0, unet_channels=(256, 512, 1024),
-          obs_noise=0.0, chunk_size=1, chunk_exec=1):
+          obs_noise=0.0, chunk_size=1, chunk_exec=1,
+          curriculum_epochs=0, n_pretrain_train_samples=None):
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     state_dim  = tr_obs.shape[-1]
@@ -667,11 +684,33 @@ def train(tr_obs, tr_act, va_obs, va_act,
 
         best_val = float('inf'); best_state = None; wait = 0
         M = len(tr_ctx)
+
+        use_curriculum = (curriculum_epochs > 0 and
+                          n_pretrain_train_samples is not None and
+                          n_pretrain_train_samples < M)
+        if use_curriculum:
+            P = n_pretrain_train_samples
+            T_samp = M - P
+            print(f'  Curriculum: {P:,} pretrain + {T_samp:,} target samples, '
+                  f'target weight decays over {curriculum_epochs} epochs.', flush=True)
+
         for epoch in range(max_epochs):
             model.train()
-            perm = torch.randperm(M, device=device)
+            if use_curriculum:
+                target_weight = max(0.0, 1.0 - epoch / curriculum_epochs)
+                n_target_this_epoch = int(T_samp * target_weight)
+                pretrain_idx = torch.randperm(P, device=device)
+                if n_target_this_epoch > 0:
+                    target_idx = torch.randperm(T_samp, device=device)[:n_target_this_epoch] + P
+                    epoch_idx  = torch.cat([pretrain_idx, target_idx])
+                    epoch_idx  = epoch_idx[torch.randperm(len(epoch_idx), device=device)]
+                else:
+                    epoch_idx = pretrain_idx
+                perm = epoch_idx
+            else:
+                perm = torch.randperm(M, device=device)
             ep_loss = 0.0; nb = 0
-            for b in range(0, M - batch_size + 1, batch_size):
+            for b in range(0, len(perm) - batch_size + 1, batch_size):
                 idx = perm[b:b+batch_size]
                 ctx_b = tr_ctx[idx]; ah_b = tr_ah[idx]
                 if obs_noise > 0.0:
@@ -1323,7 +1362,7 @@ def main():
     parser.add_argument('--arch',        default='transformer',
                         choices=['transformer', 'mlp', 'diffusion', 'unet', 'split_gripper'])
     parser.add_argument('--feat_subset', default='full',
-                        choices=['full', 'no_handle', 'handle_only'])
+                        choices=['full', 'no_handle', 'handle_only', 'f3'])
     parser.add_argument('--binary_gripper', action='store_true',
                         help='Separate BCE classification head for gripper dim')
     parser.add_argument('--bce_weight',  type=float, default=2.0,
@@ -1382,6 +1421,11 @@ def main():
                         help='Custom path to save the best checkpoint (overrides default)')
     parser.add_argument('--combined_data', action='store_true',
                         help='Train on pretrain+target combined (run preprocess_target.py first)')
+    parser.add_argument('--use_target_only', action='store_true',
+                        help='Train on target split only (500 demos, layouts 1-10)')
+    parser.add_argument('--curriculum_epochs', type=int, default=0,
+                        help='Mix C: epochs over which target sampling weight decays 1->0; '
+                             'requires --combined_data')
     args = parser.parse_args()
     if args.chunk_exec == 0:
         args.chunk_exec = args.chunk_size
@@ -1404,9 +1448,12 @@ def main():
 
     if not args.eval_only:
         print('=== Loading data ===', flush=True)
-        obs_all, actions, ep_bounds = load_data(n_workers=args.n_workers,
-                                                feat_indices=feat_indices,
-                                                combined_data=args.combined_data)
+        obs_all, actions, ep_bounds, n_pretrain_eps = load_data(
+            n_workers=args.n_workers,
+            feat_indices=feat_indices,
+            combined_data=args.combined_data,
+            use_target_only=args.use_target_only,
+        )
         print(f'State {obs_all.shape[-1]}-dim  Actions {actions.shape[-1]}-dim  '
               f'Frames {len(obs_all):,}  feat_subset={args.feat_subset}  arch={args.arch}',
               flush=True)
@@ -1414,6 +1461,13 @@ def main():
         tr_obs, tr_act, va_obs, va_act, tr_ep_starts, va_ep_starts = train_val_split(
             obs_all, actions, ep_bounds, val_frac=args.val_frac)
         print(f'Train {len(tr_obs):,}  Val {len(va_obs):,}', flush=True)
+
+        n_pretrain_train_samples = None
+        if args.curriculum_epochs > 0 and n_pretrain_eps > 0 and args.combined_data:
+            pretrain_frames = int(ep_bounds[n_pretrain_eps - 1][2]) if n_pretrain_eps > 0 else 0
+            n_pretrain_train_samples = int(pretrain_frames * (1 - args.val_frac))
+            print(f'  Curriculum: ~{n_pretrain_train_samples:,} pretrain train samples '
+                  f'(of {len(tr_obs):,} total)', flush=True)
 
         print('\n=== Training ===', flush=True)
         ckpt_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1473,6 +1527,8 @@ def main():
                 weight_decay=args.weight_decay,
                 chunk_size=args.chunk_size,
                 chunk_exec=args.chunk_exec,
+                curriculum_epochs=args.curriculum_epochs,
+                n_pretrain_train_samples=n_pretrain_train_samples,
             )
             torch.save(dict(
                 model_state=model.state_dict(),

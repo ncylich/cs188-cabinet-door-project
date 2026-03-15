@@ -1,0 +1,27 @@
+INFO:__main__:door_positions.npz or door_quats.npz not found — generating...
+Extracting door positions/quats for 107 episodes...
+INFO:OpenGL.acceleratesupport:No OpenGL_accelerate module loaded: No module named 'OpenGL_accelerate'
+[robosuite WARNING] Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install. (__init__.py:30)
+WARNING:robosuite_logs:Could not import robosuite_models. Some robots may not be available. If you want to use these robots, please install robosuite_models from source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install.
+[robosuite WARNING] Could not load the mink-based whole-body IK. Make sure you install related import properly (e.g. pip install mink==0.0.5), otherwise you will not be able to use the default IK controller setting for GR1 robot. (__init__.py:40)
+WARNING:robosuite_logs:Could not load the mink-based whole-body IK. Make sure you install related import properly (e.g. pip install mink==0.0.5), otherwise you will not be able to use the default IK controller setting for GR1 robot.
+[robosuite INFO] Loading controller configuration from: /home/noahcylich/cs188-cabinet-door-project/robosuite/robosuite/controllers/config/robots/default_pandaomron.json (composite_controller_factory.py:121)
+WARNING: mimicgen environments not imported since mimicgen is not installed!
+INFO:robosuite_logs:Loading controller configuration from: /home/noahcylich/cs188-cabinet-door-project/robosuite/robosuite/controllers/config/robots/default_pandaomron.json
+  20/107 episodes done (431s elapsed)
+  40/107 episodes done (854s elapsed)
+  60/107 episodes done (1364s elapsed)
+  80/107 episodes done (1842s elapsed)
+  100/107 episodes done (2305s elapsed)
+  107/107 episodes done (2454s elapsed)
+Saved 107 entries to:
+  /tmp/diffusion_policy_checkpoints/door_positions.npz
+  /tmp/diffusion_policy_checkpoints/door_quats.npz
+Total time: 2454.0s
+Validation passed: 107 episodes, z in [1.112, 1.569], max quat error 5.96e-08
+INFO:diffusion_policy.data:Loaded 107 episodes, 37492 total frames
+INFO:__main__:Processing 107 episodes with 8 workers...
+INFO:__main__:Preprocessed 37492 frames from 107 episodes in 2455.1s
+INFO:__main__:Feature dimensions: {'proprio': 16, 'door_pos': 3, 'door_quat': 4, 'eef_pos': 3, 'eef_quat': 4, 'door_to_eef_pos': 3, 'door_to_eef_quat': 4, 'gripper_to_door_dist': 1}
+INFO:__main__:Saved to /tmp/diffusion_policy_checkpoints/preprocessed_all_states.pt
+INFO:__main__:Validation PASSED: 107 episodes, 37492 frames, features ['proprio', 'door_pos', 'door_quat', 'eef_pos', 'eef_quat', 'door_to_eef_pos', 'door_to_eef_quat', 'gripper_to_door_dist']
