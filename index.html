@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="x-ua-compatible" content="ie=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Learning to Open Cabinet Doors in RoboCasa with Imitation Learning</title>
+    <meta
+      name="description"
+      content="CS 188 project page for imitation learning on RoboCasa OpenCabinet."
+    />
+
+    <link
+      rel="stylesheet"
+      href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="container" id="main">
+      <div class="row">
+        <h2 class="col-md-12 text-center project-title">
+          <strong><span class="project-title-main">Learning to Open Cabinet Doors in RoboCasa</span></strong>
+          <br />
+          with Imitation Learning
+        </h2>
+      </div>
+
+      <div class="row">
+        <div class="col-md-12 text-center">
+          <ul class="list-inline author-list">
+            <li>Noah Cylich</li>
+            <li>Satyajit Kumar</li>
+          </ul>
+          <p class="project-subline">
+            CS 188 final project
+            <br />
+            PandaOmron mobile manipulator in RoboCasa OpenCabinet
+          </p>
+          <p class="project-note">
+            Built on the course starter repository, with custom diffusion-policy
+            infrastructure, handle-feature extraction, debugging, and large
+            ablation sweeps added in this project.
+          </p>
+        </div>
+      </div>
+
+      <div class="row" id="teaser">
+        <div class="col-md-8 col-md-offset-2">
+          <div
+            class="media-slot media-slot-large"
+            data-kind="video"
+            data-src="assets/final-demo.mp4"
+            data-autoplay="true"
+            data-loop="true"
+            data-muted="true"
+            data-controls="true"
+          >
+            <div class="media-placeholder">
+              <strong>Teaser video placeholder</strong>
+              <p>
+                Add <code>assets/final-demo.mp4</code> and this block will be
+                replaced automatically.
+              </p>
+              <p class="small">
+                Suggested teaser structure: problem setup, early failure, near
+                miss, final success, then the 44% and 49% result slide.
+              </p>
+            </div>
+          </div>
+          <p class="text-center media-caption">
+            The page auto-detects local media files and swaps placeholders for
+            embedded media when the expected assets exist.
+          </p>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-md-8 col-md-offset-2">
+          <h3>Abstract</h3>
+          <p class="text-justify">
+            We study the <strong>OpenCabinet</strong> task in RoboCasa, where a
+            PandaOmron mobile manipulator must open a kitchen cabinet door in
+            previously unseen kitchen layouts using imitation learning. Our
+            project began from the course starter code and evolved into a larger
+            empirical study of behavioral cloning and diffusion-policy variants
+            under severe data constraints. The main result was that
+            <strong>representation quality mattered more than model complexity
+            early on</strong>: low-dimensional proprioception alone could not
+            solve the task, door-centroid oracle features helped but were
+            insufficient, and <strong>handle-relative features were the critical
+            signal</strong>. On the original 107-demo dataset, our best model
+            was a <strong>BC U-Net</strong> using proprioception, handle
+            position, and handle-to-end-effector relative displacement,
+            achieving <strong>44 / 100 = 44% success</strong> under a relaxed
+            one-door-open criterion. After scaling to a combined
+            <strong>607-demo</strong> dataset, a <strong>diffusion U-Net</strong>
+            surpassed BC and reached <strong>49% success</strong>, showing that
+            diffusion was more data-hungry but stronger once enough
+            demonstrations were available.
+          </p>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-md-8 col-md-offset-2">
+          <h3>Task and Setting</h3>
+          <p class="text-justify">
+            OpenCabinet is difficult because the robot must localize the
+            cabinet, reach the handle, make effective contact, and pull the
+            door open in randomized kitchens rather than a single memorized
+            scene. Each evaluation episode uses an unseen kitchen layout, so the
+            policy must generalize across geometry and placement rather than
+            memorize one trajectory.
+          </p>
+          <table class="table table-bordered table-striped project-table">
+            <tbody>
+              <tr>
+                <th>Task</th>
+                <td>RoboCasa OpenCabinet</td>
+                <th>Robot</th>
+                <td>PandaOmron mobile manipulator</td>
+              </tr>
+              <tr>
+                <th>Original dataset</th>
+                <td>107 demos, 37,492 timesteps</td>
+                <th>Scaled dataset</th>
+                <td>607 demos</td>
+              </tr>
+              <tr>
+                <th>Observations</th>
+                <td>16-D proprioception plus 3 RGB cameras</td>
+                <th>Actions</th>
+                <td>12-D arm, base, rotation, gripper, and mode control</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="text-justify">
+            We focused on three questions: what observation features are
+            actually necessary, which imitation-learning method works best at
+            this scale, and whether the bottleneck is localization, approach, or
+            grasp-and-pull execution.
+          </p>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-md-8 col-md-offset-2">
+          <h3>Approach</h3>
+          <p class="text-justify">
+            The project progressed through a sequence of controlled ablations:
+            low-dimensional BC and diffusion baselines, frozen visuomotor
+            features, oracle door-state inputs, handle-relative features, and
+            finally data scaling. Across these stages we implemented both
+            behavioral cloning and diffusion-policy pipelines, compared MLP,
+            1D U-Net, and Transformer backbones, used DDPM and DDIM schedulers,
+            and evaluated action chunking with short observation histories.
+          </p>
+          <ol class="method-list">
+            <li>
+              <strong>Low-dimensional baselines.</strong> We first verified BC
+              and diffusion pipelines on the raw 16-D proprioceptive state and
+              confirmed that action prediction worked technically, even though
+              task success remained at 0%.
+            </li>
+            <li>
+              <strong>Visuomotor features.</strong> We added frozen image
+              encoders and spatial pooling to test whether RGB alone could
+              provide enough localization signal at this dataset scale.
+            </li>
+            <li>
+              <strong>Oracle door-state diagnosis.</strong> We replayed episodes
+              in simulation to extract door position and orientation, separating
+              perception from control and producing the first nonzero success.
+            </li>
+            <li>
+              <strong>Handle-relative representation.</strong> We replaced the
+              door centroid with the actual MuJoCo handle site and handle-to-EEF
+              displacement, which aligned the observation with the true grasp
+              target.
+            </li>
+            <li>
+              <strong>BC versus diffusion under scaling.</strong> Finally, we
+              compared the best handle-aware BC and diffusion variants on the
+              original 107-demo dataset and on the larger combined 607-demo
+              dataset.
+            </li>
+          </ol>
+          <p class="text-justify">
+            The crucial representation change was moving from door-centroid
+            features to the actual MuJoCo handle site plus handle-to-end-effector
+            relative displacement. That change aligned the observation with the
+            actual grasp target and unlocked the first strong task success.
+          </p>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-md-8 col-md-offset-2">
+          <h3>Results</h3>
+          <p class="text-justify">
+            The main empirical pattern was consistent. Representation dominated
+            early performance. BC was best in the low-data regime. Diffusion
+            only won after scaling the dataset.
+          </p>
+          <table class="table table-bordered table-striped project-table">
+            <thead>
+              <tr>
+                <th>Setting</th>
+                <th>Best model</th>
+                <th>Data</th>
+                <th>Success rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Pretrain-only</td>
+                <td>BC U-Net with handle-relative features</td>
+                <td>107 demos</td>
+                <td><strong>44 / 100 = 44%</strong></td>
+              </tr>
+              <tr>
+                <td>Combined dataset</td>
+                <td>Diffusion U-Net with curriculum mixing</td>
+                <td>607 demos</td>
+                <td><strong>48-49%</strong></td>
+              </tr>
+            </tbody>
+          </table>
+
+          <table class="table table-bordered table-striped project-table">
+            <thead>
+              <tr>
+                <th>Phase</th>
+                <th>Configuration</th>
+                <th>Best result</th>
+                <th>Conclusion</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Early baseline</td>
+                <td>Proprioception only</td>
+                <td>0% success</td>
+                <td>No cabinet-location signal in unseen kitchens.</td>
+              </tr>
+              <tr>
+                <td>Visuomotor features</td>
+                <td>Frozen image encoders</td>
+                <td>0% success</td>
+                <td>Improved approach behavior, but not precise grasp-and-pull execution.</td>
+              </tr>
+              <tr>
+                <td>Oracle door state</td>
+                <td>Diffusion U-Net + door position</td>
+                <td>5% success</td>
+                <td>Localization helped, but door-centroid state was still not enough.</td>
+              </tr>
+              <tr>
+                <td>Handle-aware state</td>
+                <td>BC U-Net + handle-relative features</td>
+                <td>44% success</td>
+                <td>The handle site was the task-critical target representation.</td>
+              </tr>
+              <tr>
+                <td>Scaled-data diffusion</td>
+                <td>Diffusion U-Net + 607 demos</td>
+                <td>49% success</td>
+                <td>Diffusion became worthwhile once more data was available.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-md-8 col-md-offset-2">
+          <h3>Qualitative Rollouts</h3>
+          <div class="row media-grid-row">
+            <div class="col-sm-4">
+              <div
+                class="media-slot"
+                data-kind="image"
+                data-src="assets/proprio-failure.gif"
+              >
+                <div class="media-placeholder media-placeholder-small">
+                  <strong>Early failure</strong>
+                  <p>Add <code>assets/proprio-failure.gif</code></p>
+                </div>
+              </div>
+              <p class="rollout-caption">
+                Proprioception-only policy failing to find the cabinet.
+              </p>
+            </div>
+            <div class="col-sm-4">
+              <div
+                class="media-slot"
+                data-kind="image"
+                data-src="assets/door-centroid-near-miss.gif"
+              >
+                <div class="media-placeholder media-placeholder-small">
+                  <strong>Near miss</strong>
+                  <p>Add <code>assets/door-centroid-near-miss.gif</code></p>
+                </div>
+              </div>
+              <p class="rollout-caption">
+                Door-centroid or early handle experiment that approaches but
+                misses the true grasp geometry.
+              </p>
+            </div>
+            <div class="col-sm-4">
+              <div
+                class="media-slot"
+                data-kind="image"
+                data-src="assets/final-success.gif"
+              >
+                <div class="media-placeholder media-placeholder-small">
+                  <strong>Final success</strong>
+                  <p>Add <code>assets/final-success.gif</code></p>
+                </div>
+              </div>
+              <p class="rollout-caption">
+                Final handle-aware policy successfully opening the cabinet.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-md-8 col-md-offset-2">
+          <h3>Repository and Environment</h3>
+          <p class="text-justify">
+            The checked-in repository is still partly a course starter project.
+            The <a
+              href="https://github.com/ncylich/cs188-cabinet-door-project/blob/main/README.md"
+              target="_blank"
+              rel="noreferrer"
+              >README</a>
+            remains a starter-style walkthrough for installation, environment
+            exploration, dataset download, training, and evaluation. The
+            <a
+              href="https://github.com/ncylich/cs188-cabinet-door-project/blob/main/CURRENT_RESULTS.md"
+              target="_blank"
+              rel="noreferrer"
+              >CURRENT_RESULTS.md</a>
+            file is a chronological experiment log rather than a polished final
+            report.
+          </p>
+          <p class="text-justify">
+            Based on the current
+            <a
+              href="https://github.com/ncylich/cs188-cabinet-door-project/blob/main/install.sh"
+              target="_blank"
+              rel="noreferrer"
+              >install.sh</a>,
+            the intended environment creates a local <code>.venv</code>, clones
+            and installs <code>robosuite</code> and <code>robocasa</code>,
+            installs PyTorch plus <code>imageio[ffmpeg]</code>, pins
+            <code>numpy==2.2.5</code>, and downloads roughly 10 GB of kitchen
+            assets.
+          </p>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-md-8 col-md-offset-2">
+          <h3>Team Contributions</h3>
+          <p class="text-justify">
+            The starter repository provided the environment scaffolding,
+            installation flow, and initial educational scripts. Our project work
+            added a custom diffusion-policy pipeline, MLP / 1D U-Net /
+            Transformer backbones, oracle replay preprocessing, handle-site
+            feature extraction, BC baselines, large ablation studies, faster
+            parallel evaluation, and action / gripper bug fixes.
+          </p>
+          <ul>
+            <li>
+              <strong>Noah Cylich:</strong> core model and evaluation
+              implementation, handle-feature extraction, training
+              infrastructure, and the first working-model results.
+            </li>
+            <li>
+              <strong>Satyajit Kumar:</strong> preprocessing-pipeline updates,
+              the gripper-bug fix, experiment design, results analysis, report
+              writing, website production, video planning, and presentation
+              integration.
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="row" id="placeholder-notes">
+        <div class="col-md-8 col-md-offset-2">
+          <h3>Remaining Asset Placeholders</h3>
+          <p class="text-justify">
+            The page will automatically embed these files if you add them to the
+            repo:
+            <code>assets/final-demo.mp4</code>,
+            <code>assets/proprio-failure.gif</code>,
+            <code>assets/door-centroid-near-miss.gif</code>,
+            <code>assets/final-success.gif</code>, and optionally
+            <code>assets/final-report.pdf</code>.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      async function assetExists(src) {
+        try {
+          const head = await fetch(src, { method: "HEAD" });
+          if (head.ok) return true;
+          const get = await fetch(src, { method: "GET" });
+          return get.ok;
+        } catch (error) {
+          return false;
+        }
+      }
+
+      async function hydrateMediaSlots() {
+        const slots = document.querySelectorAll(".media-slot");
+
+        for (const slot of slots) {
+          const src = slot.dataset.src;
+          const kind = slot.dataset.kind;
+          const exists = await assetExists(src);
+          if (!exists) continue;
+
+          let node;
+          if (kind === "video") {
+            node = document.createElement("video");
+            node.src = src;
+            node.playsInline = true;
+            node.preload = "metadata";
+            node.controls = slot.dataset.controls === "true";
+            node.loop = slot.dataset.loop === "true";
+            node.muted = slot.dataset.muted === "true";
+            if (slot.dataset.autoplay === "true") {
+              node.autoplay = true;
+            }
+          } else {
+            node = document.createElement("img");
+            node.src = src;
+            node.alt = slot.dataset.alt || "";
+          }
+
+          node.className = "img-responsive center-block";
+          slot.innerHTML = "";
+          slot.appendChild(node);
+          slot.classList.add("media-ready");
+        }
+      }
+
+      async function hydrateAssetLinks() {
+        const links = document.querySelectorAll(".asset-link");
+
+        for (const link of links) {
+          const src = link.dataset.src;
+          const exists = await assetExists(src);
+          if (!exists) continue;
+
+          link.href = src;
+          link.target = "_blank";
+          link.rel = "noreferrer";
+        }
+      }
+
+      hydrateMediaSlots();
+      hydrateAssetLinks();
+    </script>
+  </body>
+</html>
