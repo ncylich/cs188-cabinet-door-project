@@ -322,6 +322,188 @@ def validate_preprocessed(save_dict=None, path=None):
     return ok
 
 
+def _hinge_worker(args):
+    """Single-process worker: replay one episode, extract per-step hinge angle."""
+    ep_id, lerobot_root, cache_dir = args
+
+    os.environ.setdefault('MUJOCO_GL', 'osmesa')
+    os.environ.setdefault('PYOPENGL_PLATFORM', 'osmesa')
+
+    import gzip as _gzip
+    import json as _json
+    from pathlib import Path as _Path
+
+    lerobot_root = _Path(lerobot_root)
+    cache_dir = _Path(cache_dir)
+    ep_dir = lerobot_root / 'extras' / f'episode_{int(ep_id):06d}'
+    cache_path = cache_dir / f'episode_{int(ep_id):06d}.npy'
+
+    if cache_path.exists():
+        return ep_id, None  # already cached
+
+    sim_states = np.load(ep_dir / 'states.npz')['states']
+    with open(ep_dir / 'ep_meta.json') as f:
+        ep_meta = _json.load(f)
+    with _gzip.open(ep_dir / 'model.xml.gz', 'rb') as f:
+        model_xml = f.read().decode('utf-8')
+
+    import robocasa  # noqa
+    import robosuite
+    from robosuite.controllers import load_composite_controller_config
+
+    env = robosuite.make(
+        env_name='OpenCabinet', robots='PandaOmron',
+        controller_configs=load_composite_controller_config(robot='PandaOmron'),
+        has_renderer=False, has_offscreen_renderer=False,
+        ignore_done=True, use_object_obs=True, use_camera_obs=False,
+        camera_depths=False, seed=0,
+        obj_instance_split='pretrain', layout_ids=-2, style_ids=-2,
+    )
+    try:
+        if hasattr(env, 'set_ep_meta'):
+            env.set_ep_meta(ep_meta)
+        env.reset()
+        env.reset_from_xml_string(env.edit_model_xml(model_xml))
+        env.sim.reset()
+
+        T = len(sim_states)
+        ep_hinge = np.zeros((T, 1), dtype=np.float32)
+        for i in range(T):
+            env.sim.set_state_from_flattened(sim_states[i])
+            env.sim.forward()
+            best = 0.0
+            for jname in env.sim.model.joint_names:
+                if 'hinge' in jname.lower():
+                    jid = env.sim.model.joint_name2id(jname)
+                    qadr = env.sim.model.jnt_qposadr[jid]
+                    ang = float(env.sim.data.qpos[qadr])
+                    if abs(ang) > abs(best):
+                        best = ang
+            ep_hinge[i, 0] = best
+    finally:
+        env.close()
+
+    np.save(cache_path, ep_hinge)
+    return ep_id, ep_hinge
+
+
+def build_hinge_cache(lerobot_root, ep_boundaries,
+                      cache_dir="/tmp/diffusion_policy_checkpoints/hinge_cache",
+                      n_workers=4):
+    """Build per-timestep hinge angles via parallel sim replay.
+
+    Returns hinge_angle_all: (N, 1) float32 array.
+    """
+    from pathlib import Path
+    cache_dir = Path(cache_dir)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    lerobot_root = str(lerobot_root)
+
+    ep_list = [(int(eid), int(start), int(end)) for eid, start, end in ep_boundaries]
+    n_missing = sum(1 for eid, _, _ in ep_list
+                    if not (cache_dir / f'episode_{eid:06d}.npy').exists())
+
+    if n_missing == 0:
+        logger.info(f"Hinge cache complete ({len(ep_list)} episodes cached).")
+    else:
+        logger.info(f"Building hinge cache: {n_missing}/{len(ep_list)} missing, "
+                    f"using {n_workers} workers...")
+        worker_args = [(eid, lerobot_root, str(cache_dir))
+                       for eid, _, _ in ep_list
+                       if not (cache_dir / f'episode_{eid:06d}.npy').exists()]
+        ctx = __import__('multiprocessing').get_context('spawn')
+        with ctx.Pool(n_workers) as pool:
+            pool.map(_hinge_worker, worker_args)
+
+    # Assemble full array
+    N = sum(end - start for _, start, end in ep_list)
+    hinge_all = np.zeros((N, 1), dtype=np.float32)
+    for eid, start, end in ep_list:
+        p = cache_dir / f'episode_{eid:06d}.npy'
+        if p.exists():
+            arr = np.load(p)
+            hinge_all[start:end] = arr[:end - start]
+    return hinge_all
+
+
+def extend_preprocessed(
+    save_path="/tmp/diffusion_policy_checkpoints/preprocessed_all_states.pt",
+    handle_cache_dir="/tmp/diffusion_policy_checkpoints/handle_cache",
+    hinge_cache_dir="/tmp/diffusion_policy_checkpoints/hinge_cache",
+    n_workers=4,
+):
+    """Load existing preprocessed_all_states.pt and add handle/hinge features.
+
+    Adds: handle_pos (3), handle_to_eef (3), hinge_angle (1).
+    Skips if already present.
+    """
+    from pathlib import Path
+
+    data = torch.load(save_path, weights_only=False)
+    features = data['features']
+
+    if 'handle_pos' in features and 'handle_to_eef' in features and 'hinge_angle' in features:
+        logger.info("Handle/hinge features already present in preprocessed data. Skipping.")
+        return data
+
+    ep_boundaries = data['ep_boundaries']  # (n_eps, 3)
+    N = data['actions'].shape[0]
+    lerobot_root = get_dataset_path()
+
+    # --- Load handle positions from existing per-episode cache ---
+    handle_cache_dir = Path(handle_cache_dir)
+    handle_pos_all = np.zeros((N, 3), dtype=np.float32)
+    missing_handle = []
+    for eid, start, end in ep_boundaries:
+        p = handle_cache_dir / f'episode_{int(eid):06d}.npy'
+        if p.exists():
+            arr = np.load(p)
+            handle_pos_all[int(start):int(end)] = arr[:int(end) - int(start)]
+        else:
+            missing_handle.append(int(eid))
+
+    if missing_handle:
+        logger.warning(f"{len(missing_handle)} episodes missing from handle cache: {missing_handle[:5]}...")
+        # Fall back to build_handle_cache for missing episodes
+        eef_pos = features['eef_pos'].numpy()
+        full = build_handle_cache(lerobot_root, eef_pos, ep_boundaries,
+                                  cache_dir=str(handle_cache_dir))
+        handle_pos_all = full
+
+    eef_pos_np = features['eef_pos'].numpy()
+    handle_to_eef_all = eef_pos_np - handle_pos_all  # (N, 3): vector from handle→EEF
+
+    # --- Build hinge angle cache ---
+    hinge_angle_all = build_hinge_cache(lerobot_root, ep_boundaries,
+                                        cache_dir=str(hinge_cache_dir),
+                                        n_workers=n_workers)
+
+    # --- Extend the data dict ---
+    new_features = {
+        'handle_pos': torch.from_numpy(handle_pos_all),
+        'handle_to_eef': torch.from_numpy(handle_to_eef_all),
+        'hinge_angle': torch.from_numpy(hinge_angle_all),
+    }
+    features.update(new_features)
+
+    new_dims = {'handle_pos': 3, 'handle_to_eef': 3, 'hinge_angle': 1}
+    data['feature_dims'].update(new_dims)
+
+    # Recompute stats for new features
+    stats = data['stats']
+    for name, arr_np in [('handle_pos', handle_pos_all),
+                         ('handle_to_eef', handle_to_eef_all),
+                         ('hinge_angle', hinge_angle_all)]:
+        stats[f'{name}_mean'] = torch.from_numpy(arr_np.mean(axis=0).astype(np.float32))
+        stats[f'{name}_std'] = torch.from_numpy(
+            np.maximum(arr_np.std(axis=0), 1e-6).astype(np.float32))
+
+    torch.save(data, save_path)
+    logger.info(f"Extended preprocessed data saved to {save_path}")
+    logger.info(f"New feature dims: {data['feature_dims']}")
+    return data
+
+
 def extract_door_quaternions(episodes, save_dir):
     """Deprecated: use generate_door_positions.generate() instead.
 

@@ -15,7 +15,7 @@ class DiffusionConfig:
     beta_start: float = 1e-4
     beta_end: float = 0.02
 
-    backbone: str = "mlp"
+    backbone: str = "unet"
     hidden_dim: int = 512
     n_layers: int = 4
     n_heads: int = 4

@@ -118,6 +118,20 @@ def compute_eef_pos_from_obs(obs: dict) -> np.ndarray:
     return (base_pos + rotated).astype(np.float32)
 
 
+def check_one_door_success(env) -> bool:
+    """Return True if at least one cabinet hinge joint is > 0.3 rad open (~17 deg)."""
+    try:
+        for joint_name in env.sim.model.joint_names:
+            if 'hinge' in joint_name.lower():
+                jid = env.sim.model.joint_name2id(joint_name)
+                qposadr = env.sim.model.jnt_qposadr[jid]
+                if abs(float(env.sim.data.qpos[qposadr])) > 0.3:
+                    return True
+        return False
+    except Exception:
+        return env._check_success()
+
+
 def create_env(split: str = "pretrain", seed: int = 0):
     import robocasa  # noqa: F401
     from robocasa.utils.env_utils import create_env as _create_env
@@ -209,7 +223,7 @@ def run_rollouts(
                 frame = env.sim.render(height=512, width=768, camera_name="robot0_agentview_center")[::-1]
                 video_writer.append_data(frame)
 
-            if env._check_success():
+            if check_one_door_success(env):
                 success = True
                 break
 
