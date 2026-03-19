@@ -178,9 +178,9 @@ Diffusion models achieve lower training loss but **identical or worse eval perfo
 | H15 | Manipulation, not localization, is the bottleneck | **Confirmed** | seq_len=1 gets within 1.8cm of handle but never opens door |
 | H16 | Binary gripper BCE head fixes gripper-never-closes | **Disproved** | Combined loss hurts arm approach; 0/20 with worse handle distances |
 | H17 | Diffusion with 16-step history fixes bimodal gripper | **Disproved** | DDIM stochasticity → inconsistent trajectories; 0/20 |
-| H18 | Single-door criterion reveals hidden successes | **PENDING** | Re-eval baseline with any_door_open() |
-| H19 | U-Net diffusion + action chunks beats MLP denoiser | **PENDING** | horizon=16, n_obs=2, FiLM conditioning |
-| H20 | Independent arm+gripper models fix gradient conflict | **PENDING** | BCTransformer(11d) + GripperMLP(1d) no shared params |
+| H18 | Single-door criterion reveals hidden successes | **Disproved** | 0/20 even with any_door_open; robot reaches 5cm but can't pull |
+| H19 | U-Net diffusion + action chunks beats MLP denoiser | **Disproved** | 0/20; same overfitting pattern, some close approaches (1.8cm) |
+| H20 | Independent arm+gripper models fix gradient conflict | **Disproved** | 0/20; split arm degrades to median 34cm vs baseline 19cm |
 
 ---
 
@@ -815,19 +815,19 @@ Professor provided three recommendations: (1) use handle positions (already done
 - **Checkpoint**: existing `bc_handle_best.pt` (BC Transformer, 44-dim, val=0.0794, seed=0 baseline)
 - **Change**: `env._check_success()` → `_any_door_open(env)` (any single door 90%+ open)
 - **Hypothesis H18**: We are already achieving partial success (1 door of 2 open) that was previously scored as failure
-- **Result**: PENDING
+- **Result**: **0/20 (0%)** — handle distances 0.057–0.688m (best ep: 0.057m, ep15: 0.057m, ep14: 0.086m). The single-door relaxation revealed NO hidden successes. The robot does reach close (5–8cm) but doesn't apply enough force to open even one door. Confirms the failure mode is grip/pull mechanics, not the two-door success criterion.
 
 ### Experiment 12b: U-Net diffusion with handle oracle
-- **Config**: `--arch unet --horizon 16 --n_obs_steps 2 --n_action_steps 8 --epochs 300 --patience 40 --ddpm_steps 100 --ddim_steps 10`
-- **State**: 44-dim handle-relative oracle (same as baseline)
-- **Hypothesis H19**: 1D Conv U-Net with action chunking + FiLM conditioning generalizes better than MLP denoiser with single-step prediction; professor specifically recommended this architecture
-- **Result**: PENDING
+- **Config**: `--arch unet --horizon 16 --n_obs_steps 2 --n_action_steps 8 --epochs 300 --patience 40 --ddpm_steps 100 --ddim_steps 10 --batch_size 256`
+- **Training**: Early stop epoch 51, best val=0.0534 (bottomed at epoch 3 val=0.061, consistent overfitting)
+- **Hypothesis H19**: 1D Conv U-Net with action chunking + FiLM conditioning generalizes better than MLP denoiser with single-step prediction
+- **Result**: **0/20 (0%)** — handle distances 0.018–0.814m. Some very close approaches (ep8: 0.018m, ep3: 0.037m, ep15: 0.036m) but never opens door. UNet overfits rapidly (same pattern as Phase 11 temporal diffusion): val bottoms at epoch 3 (0.061), rises back to 0.089 by epoch 51 while train is at 0.030.
 
 ### Experiment 12c: Split-gripper independent models
 - **Config**: `--arch split_gripper --epochs 200 --patience 30`
-- **State**: 44-dim handle-relative oracle
+- **Training**: Early stop epoch 44, arm val loss, best combined val=0.177
 - **Hypothesis H20**: Independent arm + gripper models (no shared gradient) fix the gradient conflict that caused Phase 11's binary gripper to degrade arm approach
-- **Result**: PENDING
+- **Result**: **0/20 (0%)** — handle distances 0.040–0.553m, median ~0.340m. Worse approach than baseline transformer (median ~0.194m). Splitting the models did not help; the arm model (trained with BCE loss split out) converged to a worse policy. The shared body was not actually the bottleneck — the binary gripper itself is harder to learn to apply at the right time.
 
 ---
 

@@ -18,3 +18,6 @@ MUJOCO_LOG.TXT
 
 # Lock files
 uv.lock
+
+# Preprocessed data & checkpoints (large files, stored locally)
+cabinet_door_project/checkpoints/
