@@ -34,11 +34,6 @@ Representation, Data Regime, and Policy Class}
 
 \author{
 \IEEEauthorblockN{Satyajit Kumar \and Noah Cylich}
-\IEEEauthorblockA{
-CS 188 Final Project\\
-\todo{Add university / course term if desired}\\
-Email: \todo{Add your email(s) if desired}
-}
 }
 
 \begin{document}
@@ -52,12 +47,7 @@ We study the \textit{OpenCabinet} manipulation task in RoboCasa, where a robot m
 \section{Introduction}
 Robotic manipulation in realistic environments requires policies that can perceive task-relevant objects, plan temporally consistent actions, and execute contact-rich behaviors robustly. Cabinet opening is a representative example of this challenge: the robot must not only move toward a cabinet, but also target the handle, align its end effector, and pull the door open under varying scene layouts.
 
-In this project, we study the RoboCasa \textit{OpenCabinet} task through the lens of imitation learning. Rather than asking only which policy architecture works best, we investigate three broader questions:
-\begin{enumerate}[leftmargin=1.5em]
-    \item What information must the policy observe to solve the task?
-    \item How do behavioral cloning and diffusion policies compare in the low-data regime?
-    \item At what point does additional data change which method is best?
-\end{enumerate}
+In this project, we study the RoboCasa \textit{OpenCabinet} task through the lens of imitation learning. Rather than asking only which policy architecture works best, we focus on three broader questions: what information the policy must observe to solve the task, how behavioral cloning and diffusion policies compare in the low-data regime, and at what point additional data changes which method is most effective.
 
 Our final conclusion is that the largest early gains come from \emph{representation design}, not architecture alone. State-only policies fail because they cannot localize the cabinet. Door-centric oracle features help, but the decisive improvement comes from handle-relative representations. Once those are in place, BC is the best method in the 107-demo regime, while diffusion overtakes BC only after scaling the dataset substantially.
 
@@ -65,78 +55,40 @@ Our final conclusion is that the largest early gains come from \emph{representat
 The goal of this project is to train a policy that opens a kitchen cabinet door in the RoboCasa \textit{OpenCabinet} task using imitation learning from demonstrations.
 
 \subsection{Task}
-Each evaluation episode spawns a randomized kitchen from a large set of possible layouts. A successful rollout requires the robot to:
-\begin{enumerate}[leftmargin=1.5em]
-    \item identify the cabinet location,
-    \item approach the correct handle,
-    \item make appropriate contact / grasp,
-    \item pull the cabinet door open within the episode horizon.
-\end{enumerate}
+Each evaluation episode spawns a randomized kitchen from a large set of possible layouts. A successful rollout requires the robot to identify the cabinet location, approach the correct handle, establish appropriate contact or grasp, and pull the cabinet door open within the episode horizon.
 
 \subsection{Inputs and Outputs}
-The dataset provides:
-\begin{itemize}[leftmargin=1.5em]
-    \item a 16-dimensional proprioceptive state,
-    \item RGB observations from multiple cameras,
-    \item demonstration actions with 12 dimensions.
-\end{itemize}
+The dataset provides a 16-dimensional proprioceptive state, RGB observations from multiple cameras, and 12-dimensional demonstration actions. Across the project, we also experiment with additional oracle state features derived from simulation replay, including door position, handle position, relative geometry, and hinge angle. The policy outputs action sequences controlling end-effector motion, gripper behavior, and other robot controls.
 
 Across the project, we also experiment with additional oracle state features derived from simulation replay, including door position, handle position, relative geometry, and hinge angle.
 
 The policy outputs action sequences controlling end-effector motion, gripper action, and other robot controls.
 
 \subsection{Evaluation Metrics}
-We evaluate models primarily using:
-\begin{itemize}[leftmargin=1.5em]
-    \item \textbf{Success rate}: fraction of rollouts that open the cabinet sufficiently,
-    \item \textbf{Distance reduction}: how much the robot reduces its distance to the target (door or handle),
-    \item \textbf{Qualitative rollout behavior}: approach quality, near-misses, and failure modes.
-\end{itemize}
+We evaluate models using three main criteria: success rate, defined as the fraction of rollouts that open the cabinet sufficiently; distance reduction, measuring how much the robot reduces its distance to the target (door or handle); and qualitative rollout behavior, including approach quality, near-misses, and failure modes.
 
 \section{Method Overview}
 Our project proceeded as a sequence of increasingly targeted experiments. Instead of fixing one architecture and tuning it, we used the task to diagnose what information and modeling choices were actually necessary.
 
 \subsection{Phase 1: State-Only Diffusion Policies}
-We first implemented diffusion policies using only the raw 16-dimensional proprioceptive state. We trained multiple denoising backbones:
-\begin{itemize}[leftmargin=1.5em]
-    \item MLP,
-    \item 1D U-Net,
-    \item Transformer.
-\end{itemize}
+We first implemented diffusion policies using only the raw 16-dimensional proprioceptive state. We trained multiple denoising backbones, including MLP, 1D U-Net, and Transformer architectures. These models fit the demonstration actions on the training set, confirming that the diffusion pipeline worked technically. However, all achieved \best{0\% success} at evaluation, showing that the core issue was missing task information: the state did not contain cabinet location.
 
 These models fit the demonstration actions on the training set, confirming that the diffusion pipeline worked technically. However, all achieved \best{0\% success} at evaluation. This established that the core problem was \emph{missing task information}: the state did not contain cabinet location.
 
 \subsection{Phase 2: Visuomotor Models}
-We next explored image-conditioned policies using frozen visual encoders:
-\begin{itemize}[leftmargin=1.5em]
-    \item ImageNet ResNet-18 with global average pooling,
-    \item ImageNet ResNet-18 with spatial softmax,
-    \item R3M-based features,
-    \item a published-style diffusion-policy visual configuration.
-\end{itemize}
+We next explored image-conditioned policies using frozen visual encoders. These included ImageNet ResNet-18 with global average pooling, ImageNet ResNet-18 with spatial softmax, R3M-based features, and a published-style diffusion-policy visual configuration. While these models improved approach behavior—especially when spatial structure was preserved—they still failed to solve the full task at our data scale.
 
 These models improved approach behavior somewhat, especially when spatial information was preserved, but still failed to solve the full task at our data scale.
 
 \subsection{Phase 3: Oracle Door Features}
 To separate perception from control, we augmented the observation with oracle door geometry extracted from simulator replay. This produced the first task success and showed that once object location is provided, the policy can begin to approach and interact more meaningfully with the cabinet.
 
-\subsection{Phase 4: BC vs. Diffusion}
-After confirming that geometry was the bottleneck, we compared direct behavioral cloning (BC) against diffusion policies under shared experimental settings. We evaluated:
-\begin{itemize}[leftmargin=1.5em]
-    \item BC MLP / Transformer / U-Net,
-    \item Diffusion MLP / Transformer / U-Net,
-    \item multiple training horizons and validation-based early stopping.
-\end{itemize}
+After confirming that geometry was the main bottleneck, we compared direct behavioral cloning (BC) against diffusion policies under shared experimental settings. We evaluated MLP, Transformer, and U-Net backbones for both BC and diffusion, along with multiple training horizons and validation-based early stopping. This revealed a key low-data result: in the 107-demo regime, small BC models often outperformed diffusion in task performance while training significantly faster.
 
 This revealed a key low-data result: in the 107-demo regime, small BC models often outperformed diffusion in task performance while training much faster.
 
 \subsection{Phase 5: Handle-Relative State Design}
-The biggest conceptual change in the project was realizing that targeting the \emph{door centroid} is not the same as targeting the \emph{handle}. We therefore replayed demonstrations in MuJoCo to extract actual handle-site positions and constructed handle-relative features such as:
-\begin{itemize}[leftmargin=1.5em]
-    \item handle position,
-    \item handle-to-end-effector relative displacement,
-    \item related geometric features such as hinge angle.
-\end{itemize}
+The biggest conceptual change in the project was recognizing that targeting the door centroid is not equivalent to targeting the handle. We therefore replayed demonstrations in MuJoCo to extract handle-site positions and constructed handle-relative features such as handle position, handle-to-end-effector displacement, and hinge angle. These representations aligned the observation with the true physical target of the task and produced a major increase in success.
 
 These representations aligned the observation with the true physical target of the task and produced a major jump in success.
 
@@ -152,50 +104,22 @@ We implemented and compared two policy families:
 \textbf{Diffusion Policy:} An iterative denoising model that predicts actions through a diffusion process. We implemented DDPM/DDIM-style training and inference along with multiple denoising backbones.
 
 \subsection{Backbones}
-Across BC and diffusion settings, we tested:
-\begin{itemize}[leftmargin=1.5em]
-    \item MLP backbones,
-    \item 1D U-Net backbones,
-    \item Transformer backbones.
-\end{itemize}
+Across both BC and diffusion settings, we evaluated MLP, 1D U-Net, and Transformer backbones to understand how architecture interacts with representation and data regime.
 
 \subsection{Temporal Action Modeling}
 We experimented with action chunking and temporal context. In the strongest low-data models, temporal coherence proved important: purely reactive one-step policies were much less effective than chunked-action models with short history.
 
 \subsection{Feature Engineering}
-A large portion of the project focused on observation design. We tested:
-\begin{itemize}[leftmargin=1.5em]
-    \item raw proprioception,
-    \item door position and orientation,
-    \item global end-effector position / orientation,
-    \item door-to-end-effector relative geometry,
-    \item scalar distance features,
-    \item handle position,
-    \item handle-to-end-effector relative displacement,
-    \item hinge angle.
-\end{itemize}
+A large portion of the project focused on observation design. We explored a range of features, including raw proprioception, door position and orientation, global end-effector pose, door-to-end-effector relative geometry, scalar distance features, handle position, handle-to-end-effector displacement, and hinge angle. These experiments were critical in identifying which representations aligned best with the manipulation objective.
 
 \subsection{Infrastructure and Debugging}
-We also implemented substantial supporting infrastructure:
-\begin{itemize}[leftmargin=1.5em]
-    \item cached preprocessing of oracle state features,
-    \item handle-position extraction via simulator replay,
-    \item parallel evaluation workers for faster rollout statistics,
-    \item corrected action-mapping / gripper-threshold logic,
-    \item validation-based early stopping to avoid severe overfitting.
-\end{itemize}
+We also implemented substantial supporting infrastructure, including cached preprocessing of oracle state features, handle-position extraction via simulator replay, parallel evaluation workers for faster rollout statistics, corrected action-mapping and gripper-threshold logic, and validation-based early stopping to avoid severe overfitting.
 
 The core diffusion-policy implementation lives in the \texttt{cabinet\_door\_project/diffusion\_policy/} package, which contains configuration, data loading, schedulers, training, inference, evaluation utilities, and the MLP / U-Net / Transformer backbones. Experiment-specific scripts include \texttt{compare\_bc\_vs\_diffusion.py} for matched BC-versus-diffusion studies, \texttt{ablation\_sweep.py} for large feature and method sweeps, \texttt{preprocess\_all\_states.py} and \texttt{generate\_door\_positions.py} for oracle replay preprocessing, \texttt{bc\_handle.py} for the handle-aware BC pipeline, and \texttt{validate\_best.py} for 100-episode validation of the strongest pretrain-only BC U-Net.
 
 \section{Experimental Setup}
 \subsection{Dataset}
-The original dataset contains:
-\begin{itemize}[leftmargin=1.5em]
-    \item \best{107 demonstrations},
-    \item \best{37,492 timesteps},
-    \item randomized kitchen layouts,
-    \item 16D proprioceptive state and 12D actions.
-\end{itemize}
+The original dataset contains \best{107 demonstrations} and \best{37,492 timesteps} across randomized kitchen layouts, with 16-dimensional proprioceptive states and 12-dimensional actions. We later expanded to a combined dataset of \best{607 demonstrations} and \best{221,516 frames}.
 
 We later downloaded the target split and created a combined dataset of:
 \begin{itemize}[leftmargin=1.5em]
@@ -204,21 +128,12 @@ We later downloaded the target split and created a combined dataset of:
 \end{itemize}
 
 \subsection{Hardware}
-All main experiments were run on:
-\begin{itemize}[leftmargin=1.5em]
-    \item \best{NVIDIA A100-SXM4-80GB} with CUDA 12.4,
-    \item a 12-core workstation used for later parallel evaluation; empirically, 4 workers gave the best throughput before CPU contention dominated.
-\end{itemize}
+All main experiments were run on an \best{NVIDIA A100-SXM4-80GB} GPU with CUDA 12.4. Later evaluation was performed on a 12-core workstation using parallel rollout workers, where we found that four workers provided the best throughput before CPU contention dominated.
 
 \subsection{Evaluation Protocol}
 All rollout evaluations used a 500-step horizon. During rapid iteration we often used 16 or 20 episodes, but the main headline pretrain-only result was validated over 100 episodes. In the main validation scripts, we used a relaxed one-door-open success criterion: a rollout counts as successful once at least one cabinet hinge angle exceeds 0.3 rad. The final project-page summary reports the 44\% and 49\% headline numbers under this same one-door-open framing.
 
-For the strongest final evaluations, we report:
-\begin{itemize}[leftmargin=1.5em]
-    \item 100 episodes for the best pretrain-only BC model,
-    \item the reported combined-data diffusion sweep summarized on the final project page,
-    \item success rate and distance reduction.
-\end{itemize}
+Our best pretrain-only model was a BC U-Net using handle-aware features. After retraining and evaluating over 100 episodes under the one-door-open hinge-angle criterion, it achieved \best{44/100 = 44\% success}, representing the strongest low-data performance in the project and a clear improvement over earlier handle-aware transformer baselines.
 
 \section{Results}
 \subsection{Stage 1: State-Only and Early Visuomotor Results}
@@ -297,12 +212,7 @@ F3 / final pretrain BC U-Net state & 22 & 44/100 = 44\% success & Best pretrain-
 \end{table}
 
 \subsection{Best Pretrain-Only Result}
-Our best pretrain-only model was a BC U-Net using handle-aware features. After retraining and evaluating over 100 episodes under the one-door-open hinge-angle criterion, it achieved:
-\begin{itemize}[leftmargin=1.5em]
-    \item \best{44/100 = 44\% success},
-    \item the strongest low-data headline performance in the project,
-    \item a clear improvement over the earlier 5--10\% handle-aware transformer baselines.
-\end{itemize}
+Even our strongest models exhibited several failure modes, including failures to reach the correct target region, near-miss manipulations where the robot approached the handle but failed to pull effectively, and issues related to gripper control and action distribution. Some earlier failures were exacerbated by evaluation-time bugs and difficulty modeling binary gripper behavior.
 
 \begin{table}[H]
 \centering
@@ -347,43 +257,18 @@ The most important representation insight was that the door centroid is not the 
 In the 107-demo regime, BC was the strongest choice because it trained quickly and made effective use of limited data. Diffusion models were more expressive, but that expressiveness did not pay off when training data was scarce. Once we scaled to 607 demonstrations, diffusion improved substantially and overtook BC, indicating that diffusion is fundamentally more data-hungry rather than inherently worse.
 
 \subsection{Failure Modes}
-Even our strongest models still exhibited clear failure modes:
-\begin{itemize}[leftmargin=1.5em]
-    \item \textbf{Approach failures}: the robot never reached the correct target region,
-    \item \textbf{Near-miss manipulation failures}: the robot reached very close to the handle but failed to apply a successful pull,
-    \item \textbf{Gripper / action-distribution issues}: some earlier failures were worsened by evaluation-time action mapping bugs and difficulty modeling binary gripper behavior.
-\end{itemize}
+Even our strongest models exhibited several failure modes, including failures to reach the correct target region, near-miss manipulations where the robot approached the handle but failed to pull effectively, and issues related to gripper control and action distribution. Some earlier failures were exacerbated by evaluation-time bugs and difficulty modeling binary gripper behavior.
 
 Concrete rollout traces reinforced this diagnosis. In the handle-aware BC transformer evaluation, Episode 4 succeeded at step 175, while Episodes 8, 14, and 17 ended only 0.144\,m, 0.217\,m, and 0.179\,m from the handle without opening the cabinet. In an even more revealing ablation, the seq\_len$=1$ transformer reached within 0.018\,m of the handle in multiple episodes yet still failed to grasp and pull, confirming that manipulation quality, not coarse localization, was the limiting factor.
 
 \subsection{Key Takeaways}
-The main lessons from this project are:
-\begin{enumerate}[leftmargin=1.5em]
-    \item Representation mattered more than architecture in the early stages.
-    \item Relative handle geometry was the most useful signal.
-    \item BC is the strongest low-data baseline.
-    \item Diffusion becomes competitive and eventually superior only after enough data is available.
-    \item Careful debugging and evaluation infrastructure were essential to making valid conclusions.
-\end{enumerate}
+The main lessons from this project are that representation mattered more than architecture in early stages, relative handle geometry was the most useful signal, behavioral cloning is the strongest low-data baseline, diffusion becomes superior only after sufficient data scaling, and careful debugging and evaluation infrastructure are essential for drawing valid conclusions.
 
 \section{Limitations}
-Our project still has several important limitations:
-\begin{itemize}[leftmargin=1.5em]
-    \item The strongest results relied on oracle handle-derived features rather than fully learned perception.
-    \item Success was still far from perfect, especially in grasp-and-pull consistency.
-    \item Some reported comparisons depend on the exact evaluation criterion used for cabinet opening.
-    \item All experiments were conducted in simulation only.
-\end{itemize}
+Our project has several limitations. The strongest results relied on oracle handle-derived features rather than fully learned perception. Success rates remained far from perfect, especially for consistent grasp-and-pull behavior. Some reported comparisons depend on the specific evaluation criterion used for cabinet opening, and all experiments were conducted in simulation.
 
 \section{Future Work}
-There are several promising next steps:
-\begin{itemize}[leftmargin=1.5em]
-    \item replace oracle handle features with learned visual handle localization,
-    \item improve gripper modeling or contact-aware action heads,
-    \item fine-tune with interactive correction or DAgger-style data aggregation,
-    \item explore RL fine-tuning after imitation initialization,
-    \item scale diffusion training further with larger datasets.
-\end{itemize}
+Promising future directions include replacing oracle handle features with learned visual localization, improving gripper modeling or contact-aware action heads, incorporating interactive correction or DAgger-style data aggregation, exploring reinforcement learning fine-tuning after imitation, and further scaling diffusion training with larger datasets.
 
 \section{Conclusion}
 We studied cabinet-opening imitation learning in RoboCasa through a progression of models, features, and dataset scales. The project showed that state-only policies fail because they lack object information, oracle door features provide the first successful behaviors, and handle-relative features are the true representational breakthrough. In the low-data 107-demo regime, BC U-Net with handle-aware state is the strongest practical method, achieving 44\% success over 100 episodes. After scaling to 607 demonstrations, diffusion U-Net overtakes BC and reaches the best overall performance. The broader lesson is that success in robotic imitation learning depends not just on policy class, but on matching the representation and model complexity to the available data.
