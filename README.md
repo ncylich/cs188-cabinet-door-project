@@ -1,24 +1,14 @@
-# Cabinet Door Opening Robot - CS 188 Starter Project
-
-### Disclaimer
-
-This project was designed for CS 188 - Intro to Robotics as a template starter project. If you have any issues with the codebase, please email me at holdengs @ cs.ucla.edu!
+# Cabinet Door Opening Robot
 
 ## Overview
 
-In this project you will build a robot that learns to open kitchen cabinet doors
-using **RoboCasa365**, a large-scale simulation benchmark for everyday robot
-tasks. You will progress from understanding the simulation environment, to
-collecting demonstrations, to training a neural-network policy that controls the
-robot autonomously.
+This repository contains a RoboCasa `OpenCabinet` project built around two use
+cases:
 
-### What you will learn
-
-1. How robotic manipulation environments are structured (MuJoCo + robosuite + RoboCasa)
-2. How the `OpenCabinet` task works -- sensors, actions, success criteria
-3. How to collect and use demonstration datasets (human + MimicGen)
-4. How to train a behavior-cloning policy from demonstrations
-5. How to evaluate your trained policy in simulation
+1. A compact starter workflow for exploring the environment, downloading data,
+   and training a simple baseline.
+2. The final project experiments, including the BC U-Net and diffusion U-Net
+   workflows documented below.
 
 ### The robot
 
@@ -64,138 +54,48 @@ python 00_verify_installation.py
 
 ```
 cabinet_door_project/
-  00_verify_installation.py      # Check that everything is installed correctly
-  01_explore_environment.py      # Create the OpenCabinet env, inspect observations/actions
-  02_random_rollouts.py          # Run random actions, save video, understand the task
-  03_teleop_collect_demos.py     # Teleoperate the robot to collect your own demonstrations
-  04_download_dataset.py         # Download the pre-collected OpenCabinet dataset
-  05_playback_demonstrations.py  # Play back demonstrations to see expert behavior
-  06_train_policy.py             # Train a simple MLP behavior-cloning policy
-  07_evaluate_policy.py          # Evaluate your trained policy in simulation
-  08_visualize_policy_rollout.py # Visualize a rollout of your policy in RoboCasa
+  00_verify_installation.py
+  01_explore_environment.py
+  02_random_rollouts.py
+  03_teleop_collect_demos.py
+  04_download_dataset.py
+  05_playback_demonstrations.py
+  06_train_policy.py
+  07_evaluate_policy.py
+  08_visualize_policy_rollout.py
+  prepare_dataset.py             # Build oracle / handle feature caches
+  validate_best.py               # Reproduce the final pretrain BC U-Net run
+  bc_handle.py                   # Handle-aware BC / diffusion training entrypoint
+  compare_bc_vs_diffusion.py     # Matched BC vs diffusion experiments
+  ablation_sweep.py              # Feature / method sweep code
+  preprocess_all_states.py       # Precompute oracle state features
+  generate_door_positions.py     # Replay-based door geometry extraction
+  diffusion_policy/              # Core training / inference / evaluation package
+  tests/                         # Regression tests for the diffusion policy code
   configs/
-    diffusion_policy.yaml        # Training hyperparameters
-  notebook.ipynb                 # Interactive Jupyter notebook companion
-install.sh                       # Installation script (macOS + WSL/Linux)
-README.md                        # This file
+    diffusion_policy.yaml
+install.sh
+README.md
 ```
 
 ---
 
-## Step-by-Step Guide
+## Starter Workflow
 
-### Step 0: Verify Installation
+For the lightweight baseline path:
 
 ```bash
 python 00_verify_installation.py
-```
-
-This checks that MuJoCo, robosuite, RoboCasa, and all dependencies are
-correctly installed and that the `OpenCabinet` environment can be created.
-
-### Step 1: Explore the Environment
-
-```bash
 python 01_explore_environment.py
-```
-
-This script creates the `OpenCabinet` environment and prints detailed
-information about:
-- **Observation space**: what the robot sees (camera images, joint positions,
-  gripper state, base pose)
-- **Action space**: what the robot can do (arm movement, gripper open/close,
-  base motion, control mode)
-- **Task description**: the natural language instruction for the episode
-- **Success criteria**: how the environment determines task completion
-
-### Step 2: Random Rollouts
-
-```bash
-python 02_random_rollouts.py
-```
-
-Runs the robot with random actions to see what happens (spoiler: nothing
-useful, but it helps you understand the action space). Saves a video to
-`/tmp/cabinet_random_rollouts.mp4`.
-
-### Step 3: Teleoperate and Collect Demonstrations
-
-```bash
-# Mac users: use mjpython instead of python
-python 03_teleop_collect_demos.py
-```
-
-Control the robot yourself using the keyboard to open cabinet doors. This
-gives you intuition for the task difficulty and generates demonstration data.
-
-**Keyboard controls:**
-| Key | Action |
-|-----|--------|
-| Ctrl+q | Reset simulation |
-| spacebar | Toggle gripper (open/close) |
-| up-right-down-left | Move horizontally in x-y plane |
-| .-; | Move vertically |
-| o-p | Rotate (yaw) |
-| y-h | Rotate (pitch) |
-| e-r | Rotate (roll) |
-| b | Toggle arm/base mode (if applicable) |
-| s | Switch active arm (if multi-armed robot) |
-| = | Switch active robot (if multi-robot environment) |              
-
-### Step 4: Download Pre-collected Dataset
-
-```bash
 python 04_download_dataset.py
-```
-
-Downloads the official OpenCabinet demonstration dataset from the RoboCasa
-servers. This includes both human demonstrations and MimicGen-expanded data
-across diverse kitchen scenes.
-
-### Step 5: Play Back Demonstrations
-
-```bash
 python 05_playback_demonstrations.py
-```
-
-Visualize the downloaded demonstrations to see how an expert opens cabinet
-doors. This is the data your policy will learn from.
-
-### Step 6: Train a Policy
-
-```bash
 python 06_train_policy.py
+python 07_evaluate_policy.py --checkpoint /tmp/cabinet_policy_checkpoints/best_policy.pt
 ```
 
-Trains a simple MLP behavior-cloning policy on low-dimensional state-action
-pairs from the demonstration data. This is meant to illustrate the
-data-loading → training → checkpoint pipeline, not to produce a policy that
-can reliably solve the task.
-
-For a policy that actually works, use one of the official training repos:
-
-```bash
-# Diffusion Policy (recommended for single-task)
-git clone https://github.com/robocasa-benchmark/diffusion_policy
-cd diffusion_policy && pip install -e .
-python train.py --config-name=train_diffusion_transformer_bs192 task=robocasa/OpenCabinet
-```
-
-You can also print setup instructions for Diffusion Policy, pi-0, and GR00T
-directly from the script:
-
-```bash
-python 06_train_policy.py --use_diffusion_policy
-```
-
-### Step 7: Evaluate Your Policy
-
-```bash
-python 07_evaluate_policy.py --checkpoint path/to/checkpoint.pt
-```
-
-Runs your trained policy in the simulation environment and reports success
-rate across multiple episodes and kitchen scenes.
+Use `03_teleop_collect_demos.py` if you want to collect demonstrations
+manually. On macOS, scripts that open a renderer window should be run with
+`mjpython`.
 
 ---
 
@@ -349,87 +249,6 @@ dataset/
   data/           # Parquet files with actions, states, rewards
   extras/         # Per-episode metadata
 ```
-
----
-
-## Architecture Diagram
-
-```
-                    RoboCasa Stack
-                    ==============
-
-  +-------------------+     +-------------------+
-  |   Kitchen Scene   |     |   OpenCabinet     |
-  |  (2500+ layouts)  |     |   (Task Logic)    |
-  +--------+----------+     +--------+----------+
-           |                         |
-           v                         v
-  +------------------------------------------------+
-  |              Kitchen Base Class                 |
-  |  - Fixture management (cabinets, fridges, etc)  |
-  |  - Object placement (bowls, cups, etc)          |
-  |  - Robot positioning                            |
-  +------------------------+-----------------------+
-                           |
-                           v
-  +------------------------------------------------+
-  |              robosuite (Backend)                |
-  |  - MuJoCo physics simulation                   |
-  |  - Robot models (PandaOmron, GR1, Spot, ...)   |
-  |  - Controller framework                        |
-  +------------------------+-----------------------+
-                           |
-                           v
-  +------------------------------------------------+
-  |              MuJoCo 3.3.1 (Physics)            |
-  |  - Contact dynamics, rendering, sensors        |
-  +------------------------------------------------+
-```
-
----
-
-## Research Directions
-
-The MLP baseline in `06_train_policy.py` is intentionally simple — it
-demonstrates the pipeline but will basically always fail. Here are three
-fun directions to improve the model:
-
-### Minimal Diffusion Policy
-
-Replace the direct-regression MLP with a diffusion-based action generator.
-The core loop is to corrupt ground-truth actions with Gaussian noise,
-train the network to predict that noise conditioned on the current state, and
-at inference iteratively denoise from pure noise to produce an action. This
-properly handles multi-modal demonstrations (e.g., approaching the handle from
-the left vs. right) that MSE loss averages into useless mean actions.
-See [Chi et al., 2023](https://diffusion-policy.cs.columbia.edu/) for the
-full approach — a minimal version can be built in ~100 lines on top of the
-existing MLP backbone.
-
-### DAgger (Online Correction)
-
-Script 03 already provides keyboard teleoperation. I have it set up with a DAgger mode that may or may not be kinda buggy. Use it to close the loop:
-train a policy, roll it out, then have a human take over and correct the robot
-whenever it fails. Aggregate these corrections into the training set and
-retrain. This directly attacks distribution shift — the fundamental reason
-offline BC degrades at test time — by collecting data in the states the policy
-actually visits. Even one or two rounds of DAgger can dramatically improve
-robustness. See [Ross et al., 2011](https://arxiv.org/abs/1011.0686).
-
-### Action Chunking
-
-Instead of predicting one action per timestep, predict the next *K* actions at
-once and execute them open-loop before re-planning. This is the key idea behind
-ACT ([Zhao et al., 2023](https://arxiv.org/abs/2304.13705)) and directly fixes
-the jerky, temporally incoherent behavior of single-step BC. Fair warning, though, this will probably require a more sophisticated model (Transformer, Diffusion or other) to provide real benefits. Implementation is
-straightforward: widen the output head to `K * action_dim`, train with the same
-MSE loss over the full chunk, and add a small FIFO buffer at inference. Try
-sweeping K = 4, 8, 16 and compare smoothness and success rate.
-
-### Other Ideas
-- Gaussian Mixture Model for output logits. Can ameliorate the MSE multimodality issue.
-- Vision Transformer. Will need a beefier computer to see benefits but definitely can improve policy at scale.
-- Hooking in an existing VLM and experimenting with zero-shot inference.
 
 ---
 
