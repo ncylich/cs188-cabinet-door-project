@@ -199,6 +199,112 @@ rate across multiple episodes and kitchen scenes.
 
 ---
 
+## Reproducing The Main U-Net Experiments
+
+If you want to reproduce the main U-Net workflows used in this project, use
+the commands below instead of the starter `06_train_policy.py` script. These
+commands assume you already ran `./install.sh`, activated `.venv`, and are
+working from `cabinet_door_project/`.
+
+### Step A: Prepare The Oracle / Handle Features
+
+Download the dataset, then build the cached oracle features used by the final
+U-Net experiments:
+
+```bash
+python 04_download_dataset.py
+python prepare_dataset.py --n_workers 4
+python prepare_dataset.py --validate_only
+```
+
+This produces the artifacts consumed by the final experiments under
+`/tmp/diffusion_policy_checkpoints/`, including:
+
+- `door_positions.npz`
+- `door_quats.npz`
+- `preprocessed_all_states.pt`
+- `handle_cache/`
+
+### Step B: Reproduce The Final Pretrain BC U-Net Result
+
+Run:
+
+```bash
+python validate_best.py
+```
+
+What this does:
+
+- Retrains the final **F3 BC U-Net** on the 107-demo pretrain dataset
+- Uses the 22-dim handle-aware state:
+  `proprio + handle_pos + handle_to_eef`
+- Evaluates **100 episodes** with the relaxed one-door-open success criterion
+
+Expected output:
+
+- Checkpoint written to `/tmp/diffusion_policy_checkpoints/best_f3_bc_unet.pt`
+- Final summary line close to:
+
+```text
+FINAL RESULT: 44/100 success (44.0%)
+```
+
+Wall-clock time depends heavily on GPU / CPU count. Training is short; the
+100-episode evaluation is the expensive part.
+
+### Step C: Reproduce The Checked-In Diffusion U-Net Run
+
+Run:
+
+```bash
+python bc_handle.py \
+  --arch unet \
+  --horizon 16 \
+  --n_obs_steps 2 \
+  --n_action_steps 8 \
+  --epochs 300 \
+  --patience 40 \
+  --ddpm_steps 100 \
+  --ddim_steps 10 \
+  --n_eps 20 \
+  --max_steps 500
+```
+
+What this does:
+
+- Trains the repository's **handle-aware diffusion U-Net**
+- Uses the 44-dim handle-relative oracle state from `bc_handle.py`
+- Evaluates **20 episodes** in the same pretrain-only setting
+
+Outputs:
+
+- Checkpoint written to `/tmp/diffusion_policy_checkpoints/bc_unet_best.pt`
+- Eval summary printed at the end as:
+
+```text
+Result: X/20 (Y.Y%)
+```
+
+To re-run eval only from the saved checkpoint:
+
+```bash
+python bc_handle.py \
+  --arch unet \
+  --eval_only \
+  --checkpoint /tmp/diffusion_policy_checkpoints/bc_unet_best.pt \
+  --n_eps 20 \
+  --max_steps 500
+```
+
+### Notes
+
+- The BC U-Net path above is the reproducible path for the **44/100**
+  pretrain result reported in the final writeup.
+- The diffusion U-Net command above reproduces the **checked-in pretrain
+  diffusion U-Net pipeline** in this repo.
+
+---
+
 ## Key Concepts
 
 ### The OpenCabinet Task

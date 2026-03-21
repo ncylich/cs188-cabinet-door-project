@@ -39,11 +39,12 @@ sys.path.insert(0, str(_ROOT))
 
 SAVE_DIR     = Path('/tmp/diffusion_policy_checkpoints')
 HANDLE_CACHE = SAVE_DIR / 'handle_cache'
-LEROBOT_ROOT = Path(
-    '/home/noahcylich/cs188-cabinet-door-project/robocasa/datasets'
-    '/v1.0/pretrain/atomic/OpenCabinet/20250819/lerobot'
-)
 CKPT_PATH = SAVE_DIR / 'bc_handle_best.pt'
+
+
+def get_lerobot_root() -> Path:
+    from diffusion_policy.data import get_dataset_path
+    return Path(get_dataset_path())
 
 # ── feature layout ─────────────────────────────────────────────────────────
 # Concatenated in this order from preprocessed_all_states.pt + handle cache
@@ -203,6 +204,7 @@ def build_handle_cache(eef_pos_all, ep_boundaries, n_workers=4):
     Returns handle_pos_all: (N, 3) float32.
     """
     HANDLE_CACHE.mkdir(parents=True, exist_ok=True)
+    lerobot_root = get_lerobot_root()
 
     # Pre-slice eef_pos per episode so workers don't carry the full array
     eef_np = eef_pos_all.numpy() if isinstance(eef_pos_all, torch.Tensor) else np.asarray(eef_pos_all)
@@ -211,7 +213,7 @@ def build_handle_cache(eef_pos_all, ep_boundaries, n_workers=4):
     # Split episodes across workers
     ep_list = [(eid, s, e) for eid, s, e in ep_boundaries]
     batches = [ep_list[i::n_workers] for i in range(n_workers)]
-    worker_args = [(b, str(LEROBOT_ROOT), str(HANDLE_CACHE), eef_by_ep) for b in batches]
+    worker_args = [(b, str(lerobot_root), str(HANDLE_CACHE), eef_by_ep) for b in batches]
 
     n_already = sum(1 for _, s, e in ep_list
                     if (HANDLE_CACHE / f'episode_{int(_):06d}.npy').exists())

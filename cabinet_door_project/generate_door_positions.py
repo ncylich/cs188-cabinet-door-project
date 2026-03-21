@@ -24,12 +24,13 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 SAVE_DIR = Path('/tmp/diffusion_policy_checkpoints')
-LEROBOT_ROOT = Path(
-    '/home/noahcylich/cs188-cabinet-door-project/robocasa/datasets'
-    '/v1.0/pretrain/atomic/OpenCabinet/20250819/lerobot'
-)
 POS_PATH  = SAVE_DIR / 'door_positions.npz'
 QUAT_PATH = SAVE_DIR / 'door_quats.npz'
+
+
+def get_lerobot_root() -> Path:
+    from diffusion_policy.data import get_dataset_path
+    return Path(get_dataset_path())
 
 
 def _make_env():
@@ -69,10 +70,11 @@ def generate(force=False):
               f"  {POS_PATH}\n  {QUAT_PATH}")
         return
 
-    ep_dirs = sorted(LEROBOT_ROOT.glob('extras/episode_*'))
+    lerobot_root = get_lerobot_root()
+    ep_dirs = sorted(lerobot_root.glob('extras/episode_*'))
     if not ep_dirs:
         raise FileNotFoundError(
-            f"No episode dirs found under {LEROBOT_ROOT / 'extras'}. "
+            f"No episode dirs found under {lerobot_root / 'extras'}. "
             "Run 04_download_dataset.py first."
         )
 

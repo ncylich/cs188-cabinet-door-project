@@ -33,10 +33,6 @@ sys.path.insert(0, str(_ROOT))
 
 SAVE_DIR     = Path('/tmp/diffusion_policy_checkpoints')
 HANDLE_CACHE = SAVE_DIR / 'handle_cache'
-LEROBOT_ROOT = Path(
-    '/home/noahcylich/cs188-cabinet-door-project/robocasa/datasets'
-    '/v1.0/pretrain/atomic/OpenCabinet/20250819/lerobot'
-)
 
 
 # ── helpers ────────────────────────────────────────────────────────────────

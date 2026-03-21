@@ -213,13 +213,13 @@
                 <td>Pretrain-only</td>
                 <td>BC U-Net with handle-relative features</td>
                 <td>107 demos</td>
-                <td><strong>44 / 100 = 44%</strong></td>
+                <td>44%</td>
               </tr>
               <tr>
                 <td>Combined dataset</td>
                 <td>Diffusion U-Net with curriculum mixing</td>
                 <td>607 demos</td>
-                <td><strong>48-49%</strong></td>
+                <td><strong>49%</strong></td>
               </tr>
             </tbody>
           </table>
@@ -229,7 +229,7 @@
               <tr>
                 <th>Phase</th>
                 <th>Configuration</th>
-                <th>Best result</th>
+                <th>Success rate</th>
                 <th>Conclusion</th>
               </tr>
             </thead>
@@ -237,31 +237,31 @@
               <tr>
                 <td>Early baseline</td>
                 <td>Proprioception only</td>
-                <td>0% success</td>
+                <td>0%</td>
                 <td>No cabinet-location signal in unseen kitchens.</td>
               </tr>
               <tr>
                 <td>Visuomotor features</td>
                 <td>Frozen image encoders</td>
-                <td>0% success</td>
+                <td>0%</td>
                 <td>Improved approach behavior, but not precise grasp-and-pull execution.</td>
               </tr>
               <tr>
                 <td>Oracle door state</td>
                 <td>Diffusion U-Net + door position</td>
-                <td>5% success</td>
+                <td>5%</td>
                 <td>Localization helped, but door-centroid state was still not enough.</td>
               </tr>
               <tr>
                 <td>Handle-aware state</td>
                 <td>BC U-Net + handle-relative features</td>
-                <td>44% success</td>
+                <td>44%</td>
                 <td>The handle site was the task-critical target representation.</td>
               </tr>
               <tr>
                 <td>Scaled-data diffusion</td>
                 <td>Diffusion U-Net + 607 demos</td>
-                <td>49% success</td>
+                <td><strong>49%</strong></td>
                 <td>Diffusion became worthwhile once more data was available.</td>
               </tr>
             </tbody>
