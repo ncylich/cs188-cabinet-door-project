@@ -60,10 +60,6 @@ Each evaluation episode spawns a randomized kitchen from a large set of possible
 \subsection{Inputs and Outputs}
 The dataset provides a 16-dimensional proprioceptive state, RGB observations from multiple cameras, and 12-dimensional demonstration actions. Across the project, we also experiment with additional oracle state features derived from simulation replay, including door position, handle position, relative geometry, and hinge angle. The policy outputs action sequences controlling end-effector motion, gripper behavior, and other robot controls.
 
-Across the project, we also experiment with additional oracle state features derived from simulation replay, including door position, handle position, relative geometry, and hinge angle.
-
-The policy outputs action sequences controlling end-effector motion, gripper action, and other robot controls.
-
 \subsection{Evaluation Metrics}
 We evaluate models using three main criteria: success rate, defined as the fraction of rollouts that open the cabinet sufficiently; distance reduction, measuring how much the robot reduces its distance to the target (door or handle); and qualitative rollout behavior, including approach quality, near-misses, and failure modes.
 
@@ -71,26 +67,19 @@ We evaluate models using three main criteria: success rate, defined as the fract
 Our project proceeded as a sequence of increasingly targeted experiments. Instead of fixing one architecture and tuning it, we used the task to diagnose what information and modeling choices were actually necessary.
 
 \subsection{Phase 1: State-Only Diffusion Policies}
-We first implemented diffusion policies using only the raw 16-dimensional proprioceptive state. We trained multiple denoising backbones, including MLP, 1D U-Net, and Transformer architectures. These models fit the demonstration actions on the training set, confirming that the diffusion pipeline worked technically. However, all achieved \best{0\% success} at evaluation, showing that the core issue was missing task information: the state did not contain cabinet location.
-
-These models fit the demonstration actions on the training set, confirming that the diffusion pipeline worked technically. However, all achieved \best{0\% success} at evaluation. This established that the core problem was \emph{missing task information}: the state did not contain cabinet location.
+We first implemented diffusion policies using only the raw 16-dimensional proprioceptive state. We trained multiple denoising backbones, including MLP, 1D U-Net, and Transformer architectures. These models fit the demonstration actions on the training set, confirming that the diffusion pipeline worked technically, but all achieved \best{0\% success} at evaluation. This established that the core problem was \emph{missing task information}: the state did not contain cabinet location.
 
 \subsection{Phase 2: Visuomotor Models}
 We next explored image-conditioned policies using frozen visual encoders. These included ImageNet ResNet-18 with global average pooling, ImageNet ResNet-18 with spatial softmax, R3M-based features, and a published-style diffusion-policy visual configuration. While these models improved approach behavior—especially when spatial structure was preserved—they still failed to solve the full task at our data scale.
 
-These models improved approach behavior somewhat, especially when spatial information was preserved, but still failed to solve the full task at our data scale.
-
 \subsection{Phase 3: Oracle Door Features}
 To separate perception from control, we augmented the observation with oracle door geometry extracted from simulator replay. This produced the first task success and showed that once object location is provided, the policy can begin to approach and interact more meaningfully with the cabinet.
 
+\subsection{Phase 4: BC vs. Diffusion Under Shared Features}
 After confirming that geometry was the main bottleneck, we compared direct behavioral cloning (BC) against diffusion policies under shared experimental settings. We evaluated MLP, Transformer, and U-Net backbones for both BC and diffusion, along with multiple training horizons and validation-based early stopping. This revealed a key low-data result: in the 107-demo regime, small BC models often outperformed diffusion in task performance while training significantly faster.
-
-This revealed a key low-data result: in the 107-demo regime, small BC models often outperformed diffusion in task performance while training much faster.
 
 \subsection{Phase 5: Handle-Relative State Design}
 The biggest conceptual change in the project was recognizing that targeting the door centroid is not equivalent to targeting the handle. We therefore replayed demonstrations in MuJoCo to extract handle-site positions and constructed handle-relative features such as handle position, handle-to-end-effector displacement, and hinge angle. These representations aligned the observation with the true physical target of the task and produced a major increase in success.
-
-These representations aligned the observation with the true physical target of the task and produced a major jump in success.
 
 \subsection{Phase 6: Data Scaling}
 Finally, we expanded from the original 107-demo dataset to a combined 607-demo dataset and repeated the best BC and diffusion experiments. This allowed us to test whether diffusion had fundamentally failed or had simply been starved of data.
@@ -119,13 +108,7 @@ The core diffusion-policy implementation lives in the \texttt{cabinet\_door\_pro
 
 \section{Experimental Setup}
 \subsection{Dataset}
-The original dataset contains \best{107 demonstrations} and \best{37,492 timesteps} across randomized kitchen layouts, with 16-dimensional proprioceptive states and 12-dimensional actions. We later expanded to a combined dataset of \best{607 demonstrations} and \best{221,516 frames}.
-
-We later downloaded the target split and created a combined dataset of:
-\begin{itemize}[leftmargin=1.5em]
-    \item \best{607 demonstrations},
-    \item \best{221,516 frames}.
-\end{itemize}
+The original dataset contains \best{107 demonstrations} and \best{37,492 timesteps} across randomized kitchen layouts, with 16-dimensional proprioceptive states and 12-dimensional actions. We later downloaded the target split and expanded to a combined dataset of \best{607 demonstrations} and \best{221,516 frames}.
 
 \subsection{Hardware}
 All main experiments were run on an \best{NVIDIA A100-SXM4-80GB} GPU with CUDA 12.4. Later evaluation was performed on a 12-core workstation using parallel rollout workers, where we found that four workers provided the best throughput before CPU contention dominated.
@@ -133,7 +116,7 @@ All main experiments were run on an \best{NVIDIA A100-SXM4-80GB} GPU with CUDA 1
 \subsection{Evaluation Protocol}
 All rollout evaluations used a 500-step horizon. During rapid iteration we often used 16 or 20 episodes, but the main headline pretrain-only result was validated over 100 episodes. In the main validation scripts, we used a relaxed one-door-open success criterion: a rollout counts as successful once at least one cabinet hinge angle exceeds 0.3 rad. The final project-page summary reports the 44\% and 49\% headline numbers under this same one-door-open framing.
 
-Our best pretrain-only model was a BC U-Net using handle-aware features. After retraining and evaluating over 100 episodes under the one-door-open hinge-angle criterion, it achieved \best{44/100 = 44\% success}, representing the strongest low-data performance in the project and a clear improvement over earlier handle-aware transformer baselines.
+Our best pretrain-only model was a BC U-Net using handle-aware features. After retraining and evaluating over 100 episodes under the one-door-open hinge-angle criterion, it achieved \best{44\% success (44/100)}, representing the strongest low-data performance in the project and a clear improvement over earlier handle-aware transformer baselines.
 
 \section{Results}
 \subsection{Stage 1: State-Only and Early Visuomotor Results}
@@ -141,30 +124,17 @@ Our earliest experiments showed that raw proprioception alone is insufficient. E
 
 Frozen visuomotor encoders improved approach behavior modestly. In particular, spatially aware pooling outperformed global average pooling, suggesting that preserving \emph{where} visual features occur matters for manipulation. However, these models still did not solve the full task reliably at our data scale.
 
-\begin{table}[H]
-\centering
-\caption{Early-stage qualitative result summary.}
-\begin{tabular}{lcc}
-\toprule
-Method & Success & Distance Reduction \\
-\midrule
-State-only diffusion (best) & 0\% & $\sim$0\% \\
-ImageNet + global avg pool & 0\% & $\sim$5\% \\
-ImageNet + spatial softmax & 0\% & 40\% \\
-R3M-based visuomotor model & 0\% & 7\% \\
-\bottomrule
-\end{tabular}
-\end{table}
-
 \subsection{Stage 2: Oracle Door Features}
-Adding oracle door geometry produced the first successful rollouts. This was the first major breakthrough in the project because it proved the task could be solved once object location was provided explicitly.
+Adding oracle door geometry produced the first successful rollouts and provided the clearest early evidence that explicit object-location information helps.
 
 However, these models still targeted the door body rather than the handle, which limited success. They often approached the cabinet but stopped short of an effective grasp-and-pull interaction.
 
 \begin{table}[H]
 \centering
 \caption{Oracle door feature results.}
-\begin{tabular}{lccc}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.18\columnwidth}>{\raggedright\arraybackslash}p{0.29\columnwidth}c>{\raggedright\arraybackslash}p{0.31\columnwidth}@{}}
 \toprule
 Model & Features & Success & Notes \\
 \midrule
@@ -175,23 +145,22 @@ BC MLP / BC MLP + dropout & Strongest door-centric oracle features & 0\% & Door-
 \end{tabular}
 \end{table}
 
-\subsection{Stage 3: BC vs. Diffusion in the 107-Demo Regime}
-Once we had stronger geometric features, we compared BC and diffusion directly. In the low-data regime, BC consistently delivered stronger task performance per unit compute. Diffusion often achieved lower training loss or stronger regularization behavior, but this did not immediately translate into better manipulation success.
-
-\begin{table}[H]
+\begin{figure}[t]
 \centering
-\caption{Representative BC vs. diffusion comparison in the 107-demo regime.}
-\begin{tabular}{lccc}
-\toprule
-Method & Data & Success & Train Time \\
-\midrule
-BC U-Net & 107 demos & 0/3 & 22s \\
-BC Transformer & 107 demos & 0/3 & 110s \\
-Diffusion U-Net & 107 demos & 0/3 & 300s \\
-Diffusion Transformer & 107 demos & 0/3 & 486s \\
-\bottomrule
-\end{tabular}
-\end{table}
+\includegraphics[width=\columnwidth]{assets/early_stage_progress.png}
+\caption{Early-stage progress before handle-centric features. Spatially structured visual features improved approach quality relative to state-only or global-pooled baselines, and oracle door geometry provided the strongest pre-handle reduction in target distance.}
+\label{fig:early-stage-progress}
+\end{figure}
+
+\subsection{Stage 3: BC vs. Diffusion in the 107-Demo Regime}
+Once we had stronger geometric features, we compared BC and diffusion directly. In our matched U-Net comparison, BC delivered stronger low-data task performance and trained faster than diffusion. Figure~\ref{fig:bc-vs-diffusion-regimes} shows the broader pattern across data regimes: BC led in the 107-demo setting (44\% vs.\ 10\%), while diffusion improved more with additional data and eventually surpassed BC at 607 demos.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{assets/bc_vs_diffusion.png}
+\caption{Behavioral cloning versus diffusion U-Net across data regimes. BC was stronger in the low-data 107-demo setting, while diffusion benefited more from scaling and achieved the best overall result after expanding to 607 demonstrations.}
+\label{fig:bc-vs-diffusion-regimes}
+\end{figure}
 
 \subsection{Stage 4: Handle-Centric Features}
 The key representation breakthrough was the transition from door-centric to handle-centric state. This change aligned the policy with the true target of the task and yielded a major increase in both distance reduction and success.
@@ -199,25 +168,27 @@ The key representation breakthrough was the transition from door-centric to hand
 \begin{table}[H]
 \centering
 \caption{Representative progression of state representations.}
-\begin{tabular}{lccc}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.25\columnwidth}c>{\raggedright\arraybackslash}p{0.22\columnwidth}>{\raggedright\arraybackslash}p{0.26\columnwidth}@{}}
 \toprule
-Feature Set & Dim & Best Result & Interpretation \\
+Feature Set & Dim & \shortstack{Best\\Result} & Interpretation \\
 \midrule
 Proprio only & 16 & 0\% success & No cabinet-location signal \\
 Door-position oracle & 19 & 5\% success & First nonzero success \\
 Full handle-relative transformer state & 44 & 5--10\% success & Enabled handle-aware grasp attempts \\
-F3 / final pretrain BC U-Net state & 22 & 44/100 = 44\% success & Best pretrain-only result \\
+F3 / final pretrain BC U-Net state & 22 & 44\% success (44/100) & Best pretrain-only result \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \subsection{Best Pretrain-Only Result}
-Even our strongest models exhibited several failure modes, including failures to reach the correct target region, near-miss manipulations where the robot approached the handle but failed to pull effectively, and issues related to gripper control and action distribution. Some earlier failures were exacerbated by evaluation-time bugs and difficulty modeling binary gripper behavior.
-
 \begin{table}[H]
 \centering
 \caption{Best pretrain-only result.}
-\begin{tabular}{lcccc}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.28\columnwidth}>{\raggedright\arraybackslash}p{0.13\columnwidth}cc>{\raggedright\arraybackslash}p{0.24\columnwidth}@{}}
 \toprule
 Model & Data & Episodes & Success & Criterion \\
 \midrule
@@ -232,7 +203,9 @@ When we expanded to 607 demonstrations, diffusion improved dramatically and fina
 \begin{table}[H]
 \centering
 \caption{Final comparison after data scaling.}
-\begin{tabular}{lccc}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{0.22\columnwidth}>{\raggedright\arraybackslash}p{0.14\columnwidth}c>{\raggedright\arraybackslash}p{0.29\columnwidth}@{}}
 \toprule
 Model & Data & Success & Notes \\
 \midrule
