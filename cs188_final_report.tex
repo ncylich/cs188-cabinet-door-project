@@ -51,6 +51,17 @@ In this project, we study the RoboCasa \textit{OpenCabinet} task through the len
 
 Our final conclusion is that the largest early gains come from \emph{representation design}, not architecture alone. State-only policies fail because they cannot localize the cabinet. Door-centric oracle features help, but the decisive improvement comes from handle-relative representations. Once those are in place, BC is the best method in the 107-demo regime, while diffusion overtakes BC only after scaling the dataset substantially.
 
+\begin{figure}[!t]
+\centering
+\includegraphics[width=\columnwidth]{assets/BC_arch.png}\\[-0.3em]
+{\footnotesize (a) BC U-Net architecture.\par}
+\vspace{0.4em}
+\includegraphics[width=\columnwidth]{assets/Diffusion_arch.png}\\[-0.3em]
+{\footnotesize (b) Diffusion U-Net architecture.\par}
+\caption{Architecture diagrams for the two final policy families. BC directly predicts an action chunk from observation context, while diffusion iteratively denoises a noisy action chunk conditioned on the same context.}
+\label{fig:policy-architectures}
+\end{figure}
+
 \section{Problem Statement}
 The goal of this project is to train a policy that opens a kitchen cabinet door in the RoboCasa \textit{OpenCabinet} task using imitation learning from demonstrations.
 
@@ -70,7 +81,7 @@ Our project proceeded as a sequence of increasingly targeted experiments. Instea
 We first implemented diffusion policies using only the raw 16-dimensional proprioceptive state. We trained multiple denoising backbones, including MLP, 1D U-Net, and Transformer architectures. These models fit the demonstration actions on the training set, confirming that the diffusion pipeline worked technically, but all achieved \best{0\% success} at evaluation. This established that the core problem was \emph{missing task information}: the state did not contain cabinet location.
 
 \subsection{Phase 2: Visuomotor Models}
-We next explored image-conditioned policies using frozen visual encoders. These included ImageNet ResNet-18 with global average pooling, ImageNet ResNet-18 with spatial softmax, R3M-based features, and a published-style diffusion-policy visual configuration. While these models improved approach behavior—especially when spatial structure was preserved—they still failed to solve the full task at our data scale.
+We next explored image-conditioned policies using frozen visual encoders. These included ImageNet ResNet-18 with global average pooling, ImageNet ResNet-18 with spatial softmax, R3M-based features, and a published-style diffusion-policy visual configuration. While these models improved approach behavior, especially when spatial structure was preserved, they still failed to solve the full task at our data scale.
 
 \subsection{Phase 3: Oracle Door Features}
 To separate perception from control, we augmented the observation with oracle door geometry extracted from simulator replay. This produced the first task success and showed that once object location is provided, the policy can begin to approach and interact more meaningfully with the cabinet.
@@ -111,7 +122,7 @@ The core diffusion-policy implementation lives in the \texttt{cabinet\_door\_pro
 The original dataset contains \best{107 demonstrations} and \best{37,492 timesteps} across randomized kitchen layouts, with 16-dimensional proprioceptive states and 12-dimensional actions. We later downloaded the target split and expanded to a combined dataset of \best{607 demonstrations} and \best{221,516 frames}.
 
 \subsection{Hardware}
-All main experiments were run on an \best{NVIDIA A100-SXM4-80GB} GPU with CUDA 12.4. Later evaluation was performed on a 12-core workstation using parallel rollout workers, where we found that four workers provided the best throughput before CPU contention dominated.
+All main experiments were run on an \best{NVIDIA A100 80GB VM on GCP}. Later evaluation was performed on a 12-core workstation using parallel rollout workers, where we found that four workers provided the best throughput before CPU contention dominated.
 
 \subsection{Evaluation Protocol}
 All rollout evaluations used a 500-step horizon. During rapid iteration we often used 16 or 20 episodes, but the main headline pretrain-only result was validated over 100 episodes. In the main validation scripts, we used a relaxed one-door-open success criterion: a rollout counts as successful once at least one cabinet hinge angle exceeds 0.3 rad. The final project-page summary reports the 44\% and 49\% headline numbers under this same one-door-open framing.
@@ -122,12 +133,12 @@ Our best pretrain-only model was a BC U-Net using handle-aware features. After r
 \subsection{Stage 1: State-Only and Early Visuomotor Results}
 Our earliest experiments showed that raw proprioception alone is insufficient. Even when diffusion models fit the training data well, they achieved no meaningful task success because they lacked any information about cabinet location.
 
-Frozen visuomotor encoders improved approach behavior modestly. In particular, spatially aware pooling outperformed global average pooling, suggesting that preserving \emph{where} visual features occur matters for manipulation. However, these models still did not solve the full task reliably at our data scale.
+Frozen visuomotor encoders improved approach behavior modestly, especially when spatial structure was preserved. In particular, spatially aware pooling outperformed global average pooling, suggesting that preserving \emph{where} visual features occur matters for manipulation. However, these models still did not solve the full task reliably at our data scale. Taken together, these early results indicate that the main bottleneck was missing task information rather than action-model capacity alone.
 
 \subsection{Stage 2: Oracle Door Features}
 Adding oracle door geometry produced the first successful rollouts and provided the clearest early evidence that explicit object-location information helps.
 
-However, these models still targeted the door body rather than the handle, which limited success. They often approached the cabinet but stopped short of an effective grasp-and-pull interaction.
+However, these models still targeted the door body rather than the handle, which limited success. They often approached the cabinet but stopped short of an effective grasp-and-pull interaction. This isolated the remaining difficulty: once cabinet location is known, the task is no longer coarse localization but precise interaction at the true grasp point.
 
 \begin{table}[H]
 \centering
@@ -153,7 +164,7 @@ BC MLP / BC MLP + dropout & Strongest door-centric oracle features & 0\% & Door-
 \end{figure}
 
 \subsection{Stage 3: BC vs. Diffusion in the 107-Demo Regime}
-Once we had stronger geometric features, we compared BC and diffusion directly. In our matched U-Net comparison, BC delivered stronger low-data task performance and trained faster than diffusion. Figure~\ref{fig:bc-vs-diffusion-regimes} shows the broader pattern across data regimes: BC led in the 107-demo setting (44\% vs.\ 10\%), while diffusion improved more with additional data and eventually surpassed BC at 607 demos.
+Once we had stronger geometric features, we compared BC and diffusion directly. In our matched U-Net comparison, BC delivered stronger low-data task performance and trained faster than diffusion. Figure~\ref{fig:bc-vs-diffusion-regimes} shows the broader pattern across data regimes: BC led in the 107-demo setting (44\% vs.\ 10\%), while diffusion improved more with additional data and eventually surpassed BC at 607 demos. In the low-data regime, diffusion's extra expressiveness did not pay off; BC made more efficient use of the small dataset.
 
 \begin{figure}[t]
 \centering
@@ -163,7 +174,7 @@ Once we had stronger geometric features, we compared BC and diffusion directly. 
 \end{figure}
 
 \subsection{Stage 4: Handle-Centric Features}
-The key representation breakthrough was the transition from door-centric to handle-centric state. This change aligned the policy with the true target of the task and yielded a major increase in both distance reduction and success.
+The key representation breakthrough was the transition from door-centric to handle-centric state. This change aligned the policy with the true target of the task and yielded a major increase in both distance reduction and success. The reason is simple: the door centroid is not the manipulation target, but the handle is. Once the observation was aligned with the point the robot actually needed to reach and pull, successful interaction became much more attainable.
 
 \begin{table}[H]
 \centering
@@ -197,8 +208,10 @@ BC U-Net (handle-aware) & 107 demos & 100 & 44\% & One door open, hinge angle $>
 \end{tabular}
 \end{table}
 
+Even this strongest pretrain-only model exhibited recognizable failure modes. Some rollouts failed to reach the correct target region, while others approached the handle closely but failed to convert that approach into a stable grasp-and-pull interaction. This suggests that by this stage the main limitation was no longer coarse localization, but fine manipulation quality and gripper execution.
+
 \subsection{Best Overall Result After Data Scaling}
-When we expanded to 607 demonstrations, diffusion improved dramatically and finally surpassed BC. This shows that diffusion had not failed fundamentally in earlier stages; it had simply been more data-hungry.
+When we expanded to 607 demonstrations, diffusion improved dramatically and finally surpassed BC. This suggests that diffusion had not failed fundamentally in earlier stages; it had simply been more data-hungry, and the larger dataset was enough for its extra modeling capacity to become useful.
 
 \begin{table}[H]
 \centering
@@ -216,26 +229,7 @@ Diffusion U-Net (curriculum mix) & 607 demos & 49\% & Best overall reported resu
 \end{tabular}
 \end{table}
 
-\section{Discussion and Analysis}
-\subsection{Why the Earliest Methods Failed}
-The earliest failures were not primarily due to poor architecture choices. Instead, they stemmed from missing task information: a policy that only observes the robot's own state cannot infer cabinet location in unseen kitchens. This is why state-only diffusion models fit demonstrations yet still failed at evaluation.
-
-\subsection{Why Oracle Door Features Helped}
-Oracle door-position features were the first true breakthrough because they showed that the policy could use task-relevant geometry to approach the cabinet. This isolated the problem: once cabinet location is known, the remaining challenge is no longer pure localization but precise interaction.
-
-\subsection{Why Handle-Centric Features Were the Key Breakthrough}
-The most important representation insight was that the door centroid is not the right manipulation target. The handle is. Models that targeted the door body often approached the cabinet correctly in a coarse sense but still failed to grasp or pull effectively. Handle-relative features aligned the policy with the actual physical objective of the task and produced the largest jump in success.
-
-\subsection{Why BC Won Early and Diffusion Won Later}
-In the 107-demo regime, BC was the strongest choice because it trained quickly and made effective use of limited data. Diffusion models were more expressive, but that expressiveness did not pay off when training data was scarce. Once we scaled to 607 demonstrations, diffusion improved substantially and overtook BC, indicating that diffusion is fundamentally more data-hungry rather than inherently worse.
-
-\subsection{Failure Modes}
-Even our strongest models exhibited several failure modes, including failures to reach the correct target region, near-miss manipulations where the robot approached the handle but failed to pull effectively, and issues related to gripper control and action distribution. Some earlier failures were exacerbated by evaluation-time bugs and difficulty modeling binary gripper behavior.
-
-Concrete rollout traces reinforced this diagnosis. In the handle-aware BC transformer evaluation, Episode 4 succeeded at step 175, while Episodes 8, 14, and 17 ended only 0.144\,m, 0.217\,m, and 0.179\,m from the handle without opening the cabinet. In an even more revealing ablation, the seq\_len$=1$ transformer reached within 0.018\,m of the handle in multiple episodes yet still failed to grasp and pull, confirming that manipulation quality, not coarse localization, was the limiting factor.
-
-\subsection{Key Takeaways}
-The main lessons from this project are that representation mattered more than architecture in early stages, relative handle geometry was the most useful signal, behavioral cloning is the strongest low-data baseline, diffusion becomes superior only after sufficient data scaling, and careful debugging and evaluation infrastructure are essential for drawing valid conclusions.
+Across these stages, the clearest overall pattern was that representation mattered more than architecture in the early regime. Handle-relative geometry was the most useful signal, BC was the strongest low-data baseline, and diffusion became advantageous only after sufficient data scaling.
 
 \section{Limitations}
 Our project has several limitations. The strongest results relied on oracle handle-derived features rather than fully learned perception. Success rates remained far from perfect, especially for consistent grasp-and-pull behavior. Some reported comparisons depend on the specific evaluation criterion used for cabinet opening, and all experiments were conducted in simulation.
